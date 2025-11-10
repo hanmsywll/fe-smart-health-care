@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cek Jadwal - Smart Health Care</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -44,26 +45,70 @@
     </style>
 </head>
 
-<body class="bg-gradient-to-br from-emerald-50 via-white to-cyan-50">
-    @include('partials.header')
+<body class="bg-gray-50">
+    
 
 
 
     <!-- Main Content -->
+    <!-- Sidebar & Topbar (dashboard layout) -->
+    @include('partials.sidebar', ['active' => 'ketersediaan'])
+
+    <div id="mainContent" class="sidebar-transition ml-64">
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
+            <div class="flex items-center justify-between px-6 py-4">
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-gray-100 transition">
+                        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-900">Janji Temu</h1>
+                        <p class="text-sm text-gray-500">Cek jadwal dokter dan lakukan booking</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    @php
+                        $sessionUser = session('user');
+                        $user = $sessionUser ?: auth()->user();
+                        $name = data_get($user, 'name')
+                            ?? data_get($user, 'nama')
+                            ?? data_get($user, 'full_name')
+                            ?? data_get($user, 'email')
+                            ?? 'Tamu';
+                        $role = data_get($user, 'role')
+                            ?? data_get($user, 'roles.0')
+                            ?? data_get($user, 'roles.0.name')
+                            ?? 'Pasien';
+                        $initialsSource = $name;
+                        if (str_contains($name, '@')) {
+                            $initialsSource = explode('@', $name)[0];
+                        }
+                        $initials = collect(explode(' ', $initialsSource))
+                            ->map(function($n){return mb_substr($n,0,1);})->join('');
+                    @endphp
+                    <div class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition">
+                        <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center text-white font-semibold">
+                            {{ $initials }}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-semibold text-gray-900 truncate">{{ $name }}</div>
+                            <div class="text-sm text-gray-500 truncate">{{ $role }}</div>
+                        </div>
+                    </div>
+
+                    <button onclick="logout()" class="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                        <span class="hidden md:inline">Logout</span>
+                    </button>
+                </div>
+            </div>
+        </header>
     <main class="max-w-7xl mx-auto px-6 py-12">
-        <!-- Header -->
-        <div class="mb-8">
-            <a href="/"
-                class="flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition mb-4 inline-flex">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
-                Kembali ke Home
-            </a>
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Jadwal Ketersediaan Dokter</h1>
-            <p class="text-gray-600">Pilih dokter dan jadwal yang sesuai untuk konsultasi Anda</p>
-        </div>
+        
 
         <!-- Loading State -->
         <div id="loadingSchedule" class="text-center py-12">
@@ -135,10 +180,17 @@
                                 </div>
                             </div>
                         </div>
-                        <button onclick="confirmBooking()"
-                            class="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-xl transition transform hover:scale-105">
-                            Konfirmasi Booking
-                        </button>
+                        @if(session('api_gateway_token'))
+                            <button onclick="confirmBooking()"
+                                class="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-xl transition transform hover:scale-105">
+                                Konfirmasi Booking
+                            </button>
+                        @else
+                            <a href="/login?redirect={{ urlencode('/ketersediaan') }}"
+                                class="w-full text-center bg-gray-200 text-gray-700 py-4 rounded-xl font-semibold hover:bg-gray-300 transition">
+                                Login untuk Booking
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -192,22 +244,43 @@
                 <p class="text-gray-600 mb-6">Silakan datang 15 menit sebelum jadwal konsultasi. Simpan bukti booking
                     ini.</p>
                 <div class="flex gap-3 justify-center">
-                    <button onclick="backToList()"
-                        class="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-3 rounded-full font-semibold hover:shadow-lg transition">
-                        Booking Lagi
-                    </button>
-                    <a href="/"
+                    <a href="/dashboard"
                         class="bg-white text-gray-700 px-8 py-3 rounded-full font-semibold border-2 border-gray-200 hover:border-emerald-500 transition inline-block">
-                        Kembali ke Home
+                        Lihat Dashboard
                     </a>
                 </div>
             </div>
         </div>
     </main>
+    </div>
 
-    @include('partials.footer')
 
     <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const main = document.getElementById('mainContent');
+            const isCollapsed = sidebar.style.marginLeft === '-16rem';
+            sidebar.style.marginLeft = isCollapsed ? '0' : '-16rem';
+            main.style.marginLeft = isCollapsed ? '16rem' : '0';
+        }
+
+        async function logout() {
+            const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('token_type');
+            localStorage.removeItem('user');
+            try {
+                await fetch('/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrf
+                    }
+                });
+            } catch (_) {}
+            window.location.href = '/';
+        }
+
         // State management
         let doctorsData = [];
         let selectedDoctor = null;
@@ -409,39 +482,98 @@
         }
 
         // Confirm booking
-        function confirmBooking() {
+        async function confirmBooking() {
             if (!selectedDate || !selectedTime) {
                 alert('Silakan pilih tanggal dan waktu terlebih dahulu');
                 return;
             }
 
             const keluhan = document.getElementById('keluhan').value;
+            const bookingData = {
+                id_dokter: selectedDoctor.id_dokter,
+                tanggal: selectedDate,
+                waktu_mulai: selectedTime,
+                keluhan: keluhan
+            };
 
-            // Populate success modal
-            document.getElementById('successDoctor').textContent = selectedDoctor.nama_dokter;
-            document.getElementById('successSpec').textContent = selectedDoctor.spesialisasi;
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const token = localStorage.getItem('access_token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                };
 
-            const dateObj = new Date(selectedDate);
-            document.getElementById('successDate').textContent = dateObj.toLocaleDateString('id-ID', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-            document.getElementById('successTime').textContent = selectedTime;
-            document.getElementById('successFee').textContent = `Rp ${parseInt(selectedDoctor.biaya_konsultasi).toLocaleString('id-ID')}`;
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
 
-            // Show success modal
-            document.getElementById('doctorDetailModal').classList.add('hidden');
-            document.getElementById('successModal').classList.remove('hidden');
+                const res = await fetch("{{ url('/janji/booking-cepat') }}", {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(bookingData)
+                });
 
-            // Here you would normally send data to backend
-            // const bookingData = {
-            //     id_dokter: selectedDoctor.id_dokter,
-            //     tanggal: selectedDate,
-            //     waktu_mulai: selectedTime,
-            //     keluhan: keluhan
-            // };
+                const body = await res.json().catch(() => ({ success: false, message: 'Terjadi kesalahan parsing respons' }));
+
+                if (res.ok) {
+                    const apiData = body?.data || {};
+                    const apiMessage = body?.message || 'Booking Berhasil!';
+
+                    // Update header modal jika ada
+                    const headerEl = document.querySelector('#successModal h2');
+                    if (headerEl) headerEl.textContent = apiMessage;
+
+                    // Populate success modal dengan data dari API (fallback ke pilihan user)
+                    document.getElementById('successDoctor').textContent = selectedDoctor.nama_dokter;
+                    document.getElementById('successSpec').textContent = selectedDoctor.spesialisasi;
+
+                    const dateObj = new Date(selectedDate);
+                    const displayDate = apiData?.tanggal_janji
+                        ? new Date(apiData.tanggal_janji).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                        : dateObj.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    document.getElementById('successDate').textContent = displayDate;
+
+                    const displayTime = apiData?.waktu_mulai
+                        ? `${apiData.waktu_mulai}${apiData?.waktu_selesai ? ' - ' + apiData.waktu_selesai : ''}`
+                        : selectedTime;
+                    document.getElementById('successTime').textContent = displayTime;
+
+                    document.getElementById('successFee').textContent = `Rp ${parseInt(selectedDoctor.biaya_konsultasi).toLocaleString('id-ID')}`;
+
+                    // Tampilkan modal sukses
+                    document.getElementById('doctorDetailModal').classList.add('hidden');
+                    document.getElementById('successModal').classList.remove('hidden');
+                } else {
+                    // Jika belum login, arahkan ke halaman login dan kembali ke ketersediaan
+                    if (res.status === 401) {
+                        // Simpan booking yang tertunda ke localStorage agar dieksekusi setelah login
+                        const pending = {
+                            bookingData,
+                            doctor: {
+                                nama: selectedDoctor?.nama_dokter || selectedDoctor?.nama || '-',
+                                spesialisasi: selectedDoctor?.spesialisasi || '-',
+                                biaya_konsultasi: selectedDoctor?.biaya_konsultasi || null,
+                            }
+                        };
+                        try { localStorage.setItem('pendingBooking', JSON.stringify(pending)); } catch (_) { }
+
+                        // Arahkan ke login lalu ke dashboard untuk menampilkan notifikasi sukses
+                        window.location.href = `/login?redirect=${encodeURIComponent('/dashboard')}`;
+                        return;
+                    }
+                    // Tangani error umum berdasarkan status
+                    let msg = body?.message || 'Maaf, terjadi kesalahan saat membooking janji temu';
+                    if (res.status === 409) msg = 'Slot waktu ini sudah penuh. Pilih waktu lain.';
+                    if (res.status === 400) msg = 'Dokter tidak tersedia pada jam ini. Pilih waktu lain.';
+                    if (res.status === 422) msg = 'Mohon periksa kembali data yang Anda masukkan.';
+                    alert(msg);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Maaf, terjadi kesalahan jaringan. Coba lagi nanti.');
+            }
         }
 
         // Back to doctor list

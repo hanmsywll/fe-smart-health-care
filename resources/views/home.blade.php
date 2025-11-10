@@ -51,8 +51,8 @@
                     Smart Health Care menghubungkan Anda dengan dokter terbaik melalui sistem janji temu yang mudah, cepat, dan terpercaya. Kelola kesehatan Anda dengan lebih efisien.
                 </p>
                 <div class="flex flex-wrap gap-4">
-                    <a href="{{ url('/ketersediaan') }}" class="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-full font-semibold hover:shadow-xl transition transform hover:scale-105">
-                        Cek Jadwal Dokter
+                    <a href="#layanan" class="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-full font-semibold hover:shadow-xl transition transform hover:scale-105">
+                        Layanan Kami
                     </a>
                     <a href="#about" class="bg-white text-gray-700 px-8 py-4 rounded-full font-semibold border-2 border-gray-200 hover:border-emerald-500 transition">
                         Pelajari Lebih Lanjut
@@ -84,7 +84,7 @@
     </section>
 
     <!-- Features Section -->
-    <section class="bg-white py-20">
+    <section id="layanan" class="bg-white py-20">
         <div class="max-w-7xl mx-auto px-6">
             <div class="text-center mb-12">
                 <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Layanan Kami</h2>
