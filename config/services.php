@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    // API Gateway configuration for frontend consumer
+    'api_gateway' => [
+        'base_url' => env('API_GATEWAY_URL', 'http://localhost:9000'),
+        'token' => env('API_GATEWAY_TOKEN'),
+        'timeout' => env('API_GATEWAY_TIMEOUT', 15),
+    ],
+
 ];
