@@ -10,11 +10,7 @@
                 <span class="text-xl font-bold gradient-text">Smart Health Care</span>
             </div>
             <div class="hidden md:flex items-center gap-8">
-                <a href="#home" class="text-gray-700 hover:text-emerald-600 transition font-medium">Home</a>
-                <a href="#about" class="text-gray-700 hover:text-emerald-600 transition font-medium">About Us</a>
-                <a href="#cek-jadwal" class="text-gray-700 hover:text-emerald-600 transition font-medium">Cek Jadwal</a>
-                <a href="#lokasi" class="text-gray-700 hover:text-emerald-600 transition font-medium">Lokasi</a>
-                <a href="#login" class="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-2 rounded-full hover:shadow-lg transition">Login</a>
+                <a href="/login" class="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-2 rounded-full hover:shadow-lg transition">Login</a>
             </div>
             <button class="md:hidden text-gray-700">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

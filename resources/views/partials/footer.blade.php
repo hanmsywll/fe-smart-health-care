@@ -13,7 +13,6 @@
                 <ul class="space-y-2 text-sm">
                     <li><a href="#home" class="hover:text-emerald-400 transition">Home</a></li>
                     <li><a href="#about" class="hover:text-emerald-400 transition">About Us</a></li>
-                    <li><a href="#cek-jadwal" class="hover:text-emerald-400 transition">Cek Jadwal</a></li>
                     <li><a href="#lokasi" class="hover:text-emerald-400 transition">Lokasi</a></li>
                 </ul>
             </div>

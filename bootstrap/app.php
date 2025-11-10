@@ -11,7 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Alias middleware untuk proteksi halaman yang membutuhkan login API Gateway
+        $middleware->alias([
+            'gateway.auth' => \App\Http\Middleware\EnsureGatewayAuthenticated::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
