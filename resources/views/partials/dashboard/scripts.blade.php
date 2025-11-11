@@ -111,7 +111,7 @@
                 <div class="flex items-center gap-2">
                     <span class="px-3 py-1 ${bg} ${text} rounded-full text-xs font-semibold">${statusText}</span>
                     ${id ? `
-                    <button title="Edit" onclick=\"event.stopPropagation();openEditJanji('${id}','${normalizeDateString(it?.tanggal_janji)}','${it?.waktu_mulai || ''}','${it?.waktu_selesai || ''}')\" class="p-2 rounded-lg text-gray-500 hover:text-emerald-700 hover:bg-emerald-50">
+                    <button title="Edit" onclick=\"event.stopPropagation();openEditJanji('${id}','${normalizeDateString(it?.tanggal_janji)}','${it?.waktu_mulai || ''}','${it?.waktu_selesai || ''}','${encodeURIComponent(it?.keluhan ?? it?.catatan ?? '')}')\" class="p-2 rounded-lg text-gray-500 hover:text-emerald-700 hover:bg-emerald-50">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4h2a2 2 0 012 2v2m-4-4a2 2 0 00-2 2v2m6 0h2a2 2 0 012 2v2m-4-4a2 2 0 00-2 2v2m6 0h2a2 2 0 012 2v2m-4-4a2 2 0 00-2 2v2"/></svg>
                     </button>
                     <button title="Hapus" onclick=\"event.stopPropagation();deleteJanji('${id}')\" class="p-2 rounded-lg text-gray-500 hover:text-red-700 hover:bg-red-50">
@@ -283,7 +283,7 @@
         document.getElementById('janjiModal').classList.add('hidden');
     }
 
-    function openEditJanji(id, tanggal, mulai, selesai) {
+    function openEditJanji(id, tanggal, mulai, selesai, keluhan) {
         const modal = document.getElementById('editJanjiModal');
         document.getElementById('editJanjiId').value = id || '';
         document.getElementById('editTanggal').value = normalizeDateString(tanggal || '');
@@ -309,6 +309,13 @@
                 endInput.value = '';
             }
         };
+        // Isi keluhan/catatan sebelumnya ke textarea
+        const keluhanInput = document.getElementById('editCatatan');
+        try {
+            keluhanInput.value = keluhan ? decodeURIComponent(keluhan) : '';
+        } catch (_) {
+            keluhanInput.value = keluhan || '';
+        }
         modal.classList.remove('hidden');
     }
 
