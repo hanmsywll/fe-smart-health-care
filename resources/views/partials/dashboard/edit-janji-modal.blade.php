@@ -20,12 +20,13 @@
                         <input id="editMulai" type="time" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                     </div>
                     <div>
-                        <label class="block text-sm text-gray-600 mb-1">Waktu Selesai (opsional)</label>
-                        <input id="editSelesai" type="time" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                        <label class="block text-sm text-gray-600 mb-1">Waktu Selesai (otomatis)</label>
+                        <input id="editSelesai" type="time" disabled class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-700 cursor-not-allowed" />
+                        <p class="mt-1 text-xs text-gray-500">Diisi otomatis +1 jam dari waktu mulai</p>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-600 mb-1">Catatan (opsional)</label>
+                    <label class="block text-sm text-gray-600 mb-1">Keluhan (opsional)</label>
                     <textarea id="editCatatan" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"></textarea>
                 </div>
             </div>

@@ -180,17 +180,10 @@
                                 </div>
                             </div>
                         </div>
-                        @if(session('api_gateway_token'))
-                            <button onclick="confirmBooking()"
-                                class="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-xl transition transform hover:scale-105">
-                                Konfirmasi Booking
-                            </button>
-                        @else
-                            <a href="/login?redirect={{ urlencode('/ketersediaan') }}"
-                                class="w-full text-center bg-gray-200 text-gray-700 py-4 rounded-xl font-semibold hover:bg-gray-300 transition">
-                                Login untuk Booking
-                            </a>
-                        @endif
+                        <button onclick="confirmBooking()"
+                            class="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-xl transition transform hover:scale-105">
+                            Konfirmasi Booking
+                        </button>
                     </div>
                 </div>
             </div>
@@ -301,7 +294,13 @@
             scheduleContainer.classList.add('hidden');
 
             try {
-                const response = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/ketersediaan-all');
+                const token = localStorage.getItem('access_token');
+                const response = await fetch("https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/ketersediaan", {
+                    headers: {
+                        'Accept': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    }
+                });
 
                 if (!response.ok) {
                     throw new Error('Failed to fetch data');
@@ -354,7 +353,9 @@
         }
 
         // View doctor detail
-        function viewDoctorDetail(doctorId) {
+        async function viewDoctorDetail(doctorId) {
+            // Refresh data dokter terlebih dulu agar slot up-to-date
+            await refreshDoctorData(doctorId);
             selectedDoctor = doctorsData.find(d => d.id_dokter === doctorId);
             if (!selectedDoctor) return;
 
@@ -386,10 +387,80 @@
 
             // Render date options
             renderDates();
+            // Start realtime updater untuk jumlah slot di grid tanggal
+            startSlotRealtimeUpdater();
 
             // Hide time slots and booking form initially
             document.getElementById('timeSlotContainer').classList.add('hidden');
             document.getElementById('bookingFormContainer').classList.add('hidden');
+        }
+
+        // Refresh data dokter dari API Gateway agar slot selalu terbaru
+        async function refreshDoctorData(doctorId) {
+            try {
+                const token = localStorage.getItem('access_token');
+                const response = await fetch("https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/ketersediaan", {
+                    headers: {
+                        'Accept': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    }
+                });
+                const data = await response.json().catch(() => []);
+                if (Array.isArray(data)) {
+                    doctorsData = data;
+                }
+            } catch (_) {}
+        }
+
+        // Util: format tanggal YYYY-MM-DD
+        function formatYYYYMMDD(dateObj) {
+            return dateObj.toISOString().split('T')[0];
+        }
+
+        // Hitung slot yang benar-benar masih tersedia (untuk hari ini, exclude jam yang sudah lewat)
+        function countFutureSlotsForDate(jadwal) {
+            const slots = Array.isArray(jadwal?.slot_tersedia) ? jadwal.slot_tersedia : [];
+            const todayStr = formatYYYYMMDD(new Date());
+            if (jadwal?.tanggal !== todayStr) return slots.length;
+
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            return slots.filter((s) => {
+                const parts = String(s).split(':');
+                const h = parseInt(parts[0] || '0', 10);
+                const m = parseInt(parts[1] || '0', 10);
+                const minutes = h * 60 + m;
+                return minutes > nowMinutes;
+            }).length;
+        }
+
+        // Updater berkala untuk menjaga angka slot di grid tanggal tetap realtime
+        let slotRealtimeTimer = null;
+        function startSlotRealtimeUpdater() {
+            stopSlotRealtimeUpdater();
+            slotRealtimeTimer = setInterval(() => {
+                const todayStr = formatYYYYMMDD(new Date());
+                const list = Array.isArray(selectedDoctor?.jadwal_ketersediaan) ? selectedDoctor.jadwal_ketersediaan : [];
+                list.forEach((jadwal) => {
+                    if (jadwal.tanggal === todayStr) {
+                        const count = countFutureSlotsForDate(jadwal);
+                        const btn = document.querySelector(`.date-btn[data-date="${jadwal.tanggal}"]`);
+                        const countEl = btn?.querySelector('.slot-count');
+                        if (countEl) {
+                            countEl.textContent = count > 0 ? `${count} slot` : 'Penuh';
+                            countEl.classList.toggle('text-emerald-600', count > 0);
+                            countEl.classList.toggle('text-red-600', count === 0);
+                        }
+                    }
+                });
+            }, 30000); // update tiap 30 detik
+        }
+
+        function stopSlotRealtimeUpdater() {
+            if (slotRealtimeTimer) {
+                clearInterval(slotRealtimeTimer);
+                slotRealtimeTimer = null;
+            }
         }
 
         // Render date options
@@ -400,17 +471,17 @@
             container.innerHTML = selectedDoctor.jadwal_ketersediaan.map(jadwal => {
                 const date = new Date(jadwal.tanggal);
                 const isToday = jadwal.tanggal === today;
-                const availableSlots = jadwal.slot_tersedia.length;
+                const availableSlots = countFutureSlotsForDate(jadwal);
 
                 return `
-                    <button onclick="selectDate('${jadwal.tanggal}')" 
+                    <button onclick="selectDate('${jadwal.tanggal}')" data-date="${jadwal.tanggal}"
                         class="date-btn p-4 rounded-xl border-2 transition hover:border-emerald-500 hover:shadow-md ${selectedDate === jadwal.tanggal ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}">
                         <div class="text-center">
                             <div class="text-sm text-gray-600">${jadwal.hari}</div>
                             <div class="text-2xl font-bold text-gray-900">${date.getDate()}</div>
                             <div class="text-xs text-gray-500">${date.toLocaleDateString('id-ID', { month: 'short' })}</div>
                             ${isToday ? '<div class="text-xs text-emerald-600 font-semibold mt-1">Hari Ini</div>' : ''}
-                            <div class="text-xs mt-2 ${availableSlots > 0 ? 'text-emerald-600' : 'text-red-600'}">
+                            <div class="text-xs mt-2 ${availableSlots > 0 ? 'text-emerald-600' : 'text-red-600'} slot-count">
                                 ${availableSlots > 0 ? `${availableSlots} slot` : 'Penuh'}
                             </div>
                         </div>
@@ -443,12 +514,27 @@
             document.getElementById('bookingFormContainer').classList.add('hidden');
 
             if (jadwal.slot_tersedia.length > 0) {
-                timeGrid.innerHTML = jadwal.slot_tersedia.map(time => `
-                    <button onclick="selectTime('${time}')" 
-                        class="time-btn p-3 rounded-lg border-2 transition hover:border-emerald-500 hover:shadow-md text-center border-gray-200">
+                const isTodaySelected = selectedDate === new Date().toISOString().split('T')[0];
+                const now = new Date();
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+                timeGrid.innerHTML = jadwal.slot_tersedia.map(time => {
+                    const parts = String(time).split(':');
+                    const h = parseInt(parts[0] || '0', 10);
+                    const m = parseInt(parts[1] || '0', 10);
+                    const timeMinutes = h * 60 + m;
+                    const isPast = isTodaySelected && timeMinutes <= nowMinutes;
+
+                    const disabledAttr = isPast ? 'disabled' : '';
+                    const disabledClasses = isPast ? 'opacity-50 cursor-not-allowed' : '';
+                    const onClick = isPast ? '' : `onclick="selectTime('${time}')"`;
+
+                    return `
+                    <button ${onClick} ${disabledAttr}
+                        class="time-btn p-3 rounded-lg border-2 transition hover:border-emerald-500 hover:shadow-md text-center border-gray-200 ${disabledClasses}">
                         <div class="text-lg font-bold">${time}</div>
-                    </button>
-                `).join('');
+                    </button>`;
+                }).join('');
             } else {
                 timeGrid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-4">Tidak ada slot tersedia untuk tanggal ini</p>';
             }
@@ -509,7 +595,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const res = await fetch("{{ url('/janji/booking-cepat') }}", {
+                const res = await fetch("https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji", {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(bookingData)
