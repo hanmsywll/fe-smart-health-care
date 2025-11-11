@@ -114,10 +114,8 @@
                                 </path>
                             </svg>
                         </div>
-                        <span
-                            class="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full font-semibold">+12%</span>
                     </div>
-                    <div class="text-2xl font-bold text-gray-900 mb-1">12</div>
+                    <div id="statTotalJanji" class="text-2xl font-bold text-gray-900 mb-1">-</div>
                     <div class="text-sm text-gray-500">Total Janji Temu</div>
                 </div>
 
@@ -131,7 +129,7 @@
                         </div>
                         <span class="text-xs text-cyan-600 bg-cyan-50 px-2 py-1 rounded-full font-semibold">Aktif</span>
                     </div>
-                    <div class="text-2xl font-bold text-gray-900 mb-1">3</div>
+                    <div id="statAktifJanji" class="text-2xl font-bold text-gray-900 mb-1">-</div>
                     <div class="text-sm text-gray-500">Janji Temu Aktif</div>
                 </div>
 
@@ -174,15 +172,24 @@
                     <div class="p-6 border-b border-gray-100">
                         <div class="flex items-center justify-between gap-3">
                             <h2 class="text-lg font-bold text-gray-900">Janji Temu Mendatang</h2>
-                            <div class="flex items-center gap-2">
-                                <input id="searchTanggal" type="date" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-                                <input id="searchDokter" type="text" placeholder="Nama Dokter" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-                                <button onclick="cariJanji()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">Cari</button>
+                            <div class="flex flex-col items-start gap-1">
+                                <div class="flex items-center gap-2">
+                                    <input id="searchTanggal" type="date" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                                    <input id="searchDokter" type="text" placeholder="Nama Dokter" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                                    <input id="searchPasien" type="text" placeholder="Nama Pasien" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                                    <button onclick="cariJanji()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">Cari</button>
+                                </div>
+                                <p class="text-xs text-gray-500">Pencarian dibatasi sesuai role Anda (Pasien/Dokter/Admin). Hasil difilter berdasarkan tanggal, nama dokter, atau nama pasien.</p>
                             </div>
                         </div>
                     </div>
                     <div class="p-6">
-                        <div id="upcomingList" class="space-y-4"></div>
+                <div id="upcomingList" class="space-y-4"></div>
+                <div id="upcomingPagination" class="flex items-center justify-between mt-3 hidden">
+                    <button id="upcomingPrevBtn" onclick="upcomingPrev()" class="px-3 py-1 rounded border text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50">Sebelumnya</button>
+                    <div id="upcomingPageInfo" class="text-sm text-gray-600">Halaman 1/1</div>
+                    <button id="upcomingNextBtn" onclick="upcomingNext()" class="px-3 py-1 rounded border text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50">Berikutnya</button>
+                </div>
                     </div>
                 </div>
 
