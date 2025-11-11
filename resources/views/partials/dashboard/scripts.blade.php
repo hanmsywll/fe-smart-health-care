@@ -33,6 +33,34 @@
         }
     }
 
+    // Parse tanggal + waktu sebagai waktu WIB (+07:00) untuk penentuan mendatang
+    function parseWIBDateTime(tanggal, waktu) {
+        const t = normalizeDateString(tanggal || '');
+        const w = String(waktu || '').slice(0,5);
+        if (!t || !w) return null;
+        const iso = `${t}T${w}:00+07:00`;
+        try { return new Date(iso); } catch (_) { return null; }
+    }
+
+    function isUpcomingAppointment(it) {
+        const status = (it?.status || '').toLowerCase();
+        if (status !== 'terjadwal') return false;
+        const dt = parseWIBDateTime(it?.tanggal_janji ?? it?.tanggal, it?.waktu_mulai);
+        if (!dt) return false;
+        const now = new Date();
+        return dt.getTime() >= now.getTime();
+    }
+
+    function orderAppointmentsForUpcoming(items) {
+        if (!Array.isArray(items)) return [];
+        const scheduledAll = items.filter(it => (it?.status || '').toLowerCase() === 'terjadwal');
+        const upcomingScheduled = scheduledAll.filter(isUpcomingAppointment);
+        const pastScheduled = scheduledAll.filter(it => !isUpcomingAppointment(it));
+        const selesai = items.filter(it => (it?.status || '').toLowerCase() === 'selesai');
+        const dibatalkan = items.filter(it => (it?.status || '').toLowerCase() === 'dibatalkan');
+        return [...upcomingScheduled, ...pastScheduled, ...selesai, ...dibatalkan];
+    }
+
     function renderAppointments(items) {
         const container = document.getElementById('upcomingList');
         if (!container) return;
@@ -99,6 +127,49 @@
         });
     }
 
+    // ===== Pagination State & Helpers =====
+    let _appointmentsAll = [];
+    let _appointmentsPage = 1;
+    const _appointmentsPageSize = 5;
+
+    function updatePaginationControls() {
+        const container = document.getElementById('upcomingPagination');
+        const prevBtn = document.getElementById('upcomingPrevBtn');
+        const nextBtn = document.getElementById('upcomingNextBtn');
+        const info = document.getElementById('upcomingPageInfo');
+        const total = _appointmentsAll.length;
+        const totalPages = Math.max(1, Math.ceil(total / _appointmentsPageSize));
+        if (!container) return;
+        if (total <= _appointmentsPageSize) {
+            container.classList.add('hidden');
+            return;
+        }
+        container.classList.remove('hidden');
+        if (prevBtn) prevBtn.disabled = (_appointmentsPage <= 1);
+        if (nextBtn) nextBtn.disabled = (_appointmentsPage >= totalPages);
+        if (info) info.textContent = `Halaman ${_appointmentsPage}/${totalPages}`;
+    }
+
+    function renderAppointmentsPage(page) {
+        const total = _appointmentsAll.length;
+        const totalPages = Math.max(1, Math.ceil(total / _appointmentsPageSize));
+        _appointmentsPage = Math.min(Math.max(1, page || _appointmentsPage), totalPages);
+        const start = (_appointmentsPage - 1) * _appointmentsPageSize;
+        const end = start + _appointmentsPageSize;
+        const slice = _appointmentsAll.slice(start, end);
+        renderAppointments(slice);
+        updatePaginationControls();
+    }
+
+    function setAppointments(items) {
+        _appointmentsAll = Array.isArray(items) ? items : [];
+        _appointmentsPage = 1;
+        renderAppointmentsPage(_appointmentsPage);
+    }
+
+    function upcomingPrev() { renderAppointmentsPage(_appointmentsPage - 1); }
+    function upcomingNext() { renderAppointmentsPage(_appointmentsPage + 1); }
+
     async function cariJanji() {
         const token = localStorage.getItem('access_token');
         if (!token) {
@@ -107,18 +178,20 @@
         }
         const tgl = document.getElementById('searchTanggal')?.value || '';
         const dokter = document.getElementById('searchDokter')?.value || '';
+        const pasien = document.getElementById('searchPasien')?.value || '';
 
-        if (!tgl && !dokter) {
-            showToast('Isi pencarian', 'Masukkan tanggal atau nama dokter.');
+        if (!tgl && !dokter && !pasien) {
+            showToast('Isi pencarian', 'Masukkan tanggal, nama dokter, atau nama pasien.');
             return;
         }
 
         const qs = new URLSearchParams();
         if (tgl) qs.set('tanggal', tgl);
         if (dokter) qs.set('nama_dokter', dokter);
+        if (pasien) qs.set('nama_pasien', pasien);
 
         try {
-            let res = await fetch('/janji/search?' + qs.toString(), {
+            let res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/cari?' + qs.toString(), {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -128,26 +201,20 @@
                 window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
                 return;
             }
+            if (res.status === 403) {
+                const body403 = await res.json().catch(() => ({}));
+                showToast('Akses dibatasi', body403?.message || 'Anda tidak memiliki akses untuk pencarian ini.');
+                return;
+            }
             if (!res.ok && res.status !== 404) {
                 throw new Error('Search failed');
             }
-            if (res.status === 404) {
-                res = await fetch('/janji?' + qs.toString(), {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                if (res.status === 401) {
-                    window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
-                    return;
-                }
-            }
             const body = await res.json().catch(() => ({}));
-            const items = body?.data || [];
+            const items = Array.isArray(body) ? body : (body?.data || body?.items || body?.results || []);
 
             const qDate = tgl ? normalizeDateString(tgl) : '';
             const qName = dokter ? dokter.toLowerCase() : '';
+            const qPatient = pasien ? pasien.toLowerCase() : '';
 
             const filtered = items.filter(it => {
                 const itDate = normalizeDateString(it?.tanggal_janji);
@@ -161,10 +228,19 @@
                 ].filter(Boolean).map(s => String(s).toLowerCase());
                 const matchName = qName ? names.some(n => n.includes(qName)) : true;
 
-                return matchDate && matchName;
+                const patientNames = [
+                    it?.pasien?.pengguna?.nama_lengkap,
+                    it?.pasien?.pengguna?.name,
+                    it?.pasien?.nama
+                ].filter(Boolean).map(s => String(s).toLowerCase());
+                const matchPatient = qPatient ? patientNames.some(n => n.includes(qPatient)) : true;
+
+                return matchDate && matchName && matchPatient;
             });
 
-            renderAppointments(filtered);
+            const ordered = orderAppointmentsForUpcoming(filtered);
+            const renderedList = ordered.length ? ordered : filtered;
+            setAppointments(renderedList);
             const msg = body?.message || (items.length ? `Berhasil menemukan ${items.length} janji temu` : 'Tidak ada janji temu yang sesuai');
             showToast('Hasil Pencarian', msg);
         } catch (_) {
@@ -211,13 +287,46 @@
         const modal = document.getElementById('editJanjiModal');
         document.getElementById('editJanjiId').value = id || '';
         document.getElementById('editTanggal').value = normalizeDateString(tanggal || '');
-        document.getElementById('editMulai').value = (mulai || '').slice(0, 5);
-        document.getElementById('editSelesai').value = (selesai || '').slice(0, 5);
+        const startVal = (mulai || '').slice(0, 5);
+        const endValRaw = (selesai || '').slice(0, 5);
+        document.getElementById('editMulai').value = startVal;
+        // Jika waktu selesai kosong, isi otomatis +1 jam dari waktu mulai
+        const endInput = document.getElementById('editSelesai');
+        if (endValRaw) {
+            endInput.value = endValRaw;
+        } else if (startVal && startVal.includes(':')) {
+            endInput.value = computeEndFromStart(startVal);
+        } else {
+            endInput.value = '';
+        }
+        // Rehitung otomatis setiap kali waktu mulai berubah
+        const startInput = document.getElementById('editMulai');
+        startInput.oninput = function () {
+            const val = (startInput.value || '').slice(0, 5);
+            if (val && val.includes(':')) {
+                endInput.value = computeEndFromStart(val);
+            } else {
+                endInput.value = '';
+            }
+        };
         modal.classList.remove('hidden');
     }
 
     function closeEditJanjiModal() {
         document.getElementById('editJanjiModal').classList.add('hidden');
+    }
+
+    function computeEndFromStart(hhmm) {
+        try {
+            const [h, m] = hhmm.split(':').map(Number);
+            if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+            let endH = h + 1;
+            if (endH >= 24) endH = endH - 24;
+            const pad = (n) => (n < 10 ? '0' + n : '' + n);
+            return pad(endH) + ':' + pad(m);
+        } catch (_) {
+            return '';
+        }
     }
 
     async function submitEditJanji() {
@@ -242,15 +351,31 @@
             return;
         }
 
+        try {
+            const now = new Date();
+            const selectedDate = new Date(tanggal + 'T00:00:00');
+            const [hMulai, mMulai] = (mulai || '').split(':').map(Number);
+            if (Number.isFinite(hMulai) && Number.isFinite(mMulai)) {
+                selectedDate.setHours(hMulai, mMulai, 0, 0);
+            }
+            const startIsPast = selectedDate.getTime() < now.getTime();
+            if (startIsPast) {
+                showToast('Waktu tidak valid', 'Tidak boleh mengatur janji di waktu yang sudah lewat.');
+                return;
+            }
+        } catch (_) {
+
+        }
+
         const payload = {
             tanggal_janji: tanggal,
             waktu_mulai: mulai,
             ...(selesai ? { waktu_selesai: selesai } : {}),
-            ...(catatan ? { catatan } : {}),
+            ...(catatan ? { keluhan: catatan } : {}),
         };
 
         try {
-            const res = await fetch(`/janji/${encodeURIComponent(id)}`, {
+            const res = await fetch(`https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/${encodeURIComponent(id)}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -339,12 +464,13 @@
         }
         const tgl = document.getElementById('searchTanggal')?.value || '';
         const dokter = document.getElementById('searchDokter')?.value || '';
-        if (tgl || dokter) {
+        const pasien = document.getElementById('searchPasien')?.value || '';
+        if (tgl || dokter || pasien) {
             await cariJanji();
             return;
         }
         try {
-            const res = await fetch('/janji', {
+            const res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji', {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -355,9 +481,11 @@
                 return;
             }
             const body = await res.json().catch(() => ({}));
-            const items = body?.data || [];
-            const upcoming = items.filter(it => (it?.status || '').toLowerCase() === 'terjadwal');
-            renderAppointments(upcoming.length ? upcoming : items);
+            let items = body?.data || body || [];
+            if (!Array.isArray(items)) items = [];
+            const ordered = orderAppointmentsForUpcoming(items);
+            const renderedList = ordered.length ? ordered : items;
+            setAppointments(renderedList);
         } catch (_) {}
     }
 
@@ -425,6 +553,38 @@
 
     function hideToast() {
         document.getElementById('toast').classList.add('hidden');
+    }
+
+    async function loadStatistikJanji() {
+        const totalEl = document.getElementById('statTotalJanji');
+        const aktifEl = document.getElementById('statAktifJanji');
+        if (totalEl) totalEl.textContent = '…';
+        if (aktifEl) aktifEl.textContent = '…';
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
+            return;
+        }
+        try {
+            const res = await fetch('/janji/statistik', {
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (res.status === 401) {
+                window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
+                return;
+            }
+            const body = await res.json().catch(() => ({}));
+            const total = (body && (body.total ?? body?.data?.total)) ?? null;
+            const aktif = (body && (body.aktif ?? body?.data?.aktif)) ?? null;
+            if (totalEl) totalEl.textContent = (total !== null && total !== undefined) ? String(total) : '-';
+            if (aktifEl) aktifEl.textContent = (aktif !== null && aktif !== undefined) ? String(aktif) : '-';
+        } catch (_) {
+            if (totalEl) totalEl.textContent = '-';
+            if (aktifEl) aktifEl.textContent = '-';
+        }
     }
 
     async function initDashboard() {
@@ -498,11 +658,15 @@
                 return;
             }
             const body = await res.json();
-            const items = body?.data || [];
-            const upcoming = items.filter(it => (it?.status || '').toLowerCase() === 'terjadwal');
-            renderAppointments(upcoming.length ? upcoming : items);
+            let items = body?.data || body || [];
+            if (!Array.isArray(items)) items = [];
+            const ordered = orderAppointmentsForUpcoming(items);
+            const renderedList = ordered.length ? ordered : items;
+            setAppointments(renderedList);
         } catch (_) {
         }
+
+        try { await loadStatistikJanji(); } catch (_) {}
     }
 
     document.addEventListener('DOMContentLoaded', initDashboard);
