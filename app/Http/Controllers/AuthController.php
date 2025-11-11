@@ -176,10 +176,11 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required|string|min:6',
             'nama_lengkap' => 'required|string',
-            'no_telepon' => 'nullable|string',
+            'no_telepon' => 'required|string',
             'spesialisasi' => 'nullable|string',
             'no_lisensi' => 'nullable|string',
             'shift' => 'nullable|string',
+            'biaya_konsultasi' => 'required|numeric|min:0',
         ]);
 
         $payload = [
@@ -190,6 +191,7 @@ class AuthController extends Controller
             'spesialisasi' => $request->input('spesialisasi'),
             'no_lisensi' => $request->input('no_lisensi'),
             'shift' => $request->input('shift'),
+            'biaya_konsultasi' => $request->input('biaya_konsultasi'),
         ];
 
         try {

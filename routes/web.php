@@ -23,6 +23,8 @@ Route::view('/about', 'about');
 Route::view('/lokasi', 'lokasi');
 Route::view('/dashboard', 'dashboard');
 
+// Booking janji sesuai spesifikasi: POST /janji
+Route::post('/janji', [JanjiTemuController::class, 'bookingCepat']);
 Route::post('/janji/booking-cepat', [JanjiTemuController::class, 'bookingCepat']);
 Route::get('/janji', [JanjiTemuController::class, 'getAllJanjiTemu']);
 Route::get('/janji/search', [JanjiTemuController::class, 'searchJanjiTemu']);
