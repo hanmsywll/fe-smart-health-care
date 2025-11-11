@@ -6,6 +6,7 @@ use App\Services\ApiGateway;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Client\RequestException;
 
 class JanjiTemuController extends Controller
@@ -23,32 +24,92 @@ class JanjiTemuController extends Controller
      */
     public function bookingCepat(Request $request): JsonResponse
     {
-        $payload = $request->only(['id_dokter', 'tanggal', 'waktu_mulai', 'keluhan']);
+        // Validasi permintaan sesuai spesifikasi
+        $validator = Validator::make($request->all(), [
+            'id_dokter' => 'required|integer',
+            'tanggal' => 'required|date_format:Y-m-d',
+            'waktu_mulai' => 'required|date_format:H:i',
+            'keluhan' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mohon periksa kembali data yang Anda masukkan',
+                'errors' => $validator->errors(),
+                'timestamp' => now()->toISOString(),
+            ], 422);
+        }
+
+        $payload = $validator->validated();
         $token = $request->bearerToken();
 
         if (!$token) {
             return response()->json([
-                'success' => false,
-                'message' => 'Unauthenticated. Silakan login terlebih dahulu.',
-                'timestamp' => now()->toISOString(),
+                'message' => 'Unauthenticated.',
             ], 401);
         }
 
         try {
             $this->gateway->setToken($token);
             $result = $this->gateway->post('janji/booking-cepat', $payload);
-            return response()->json($result, 201);
+
+            // Normalisasi respons sukses 201
+            $data = is_array($result) ? ($result['data'] ?? $result) : $result;
+            return response()->json([
+                'message' => 'Janji temu berhasil dibooking',
+                'data' => $data,
+            ], 201);
         } catch (RequestException $e) {
             $resp = $e->response;
             $status = $resp ? $resp->status() : 500;
-            $body = $resp ? ($resp->json() ?? ['message' => $e->getMessage()]) : ['message' => $e->getMessage()];
-            return response()->json($body, $status);
+            $body = $resp ? ($resp->json() ?? []) : [];
+
+            // Pemetaan pesan error sesuai spesifikasi
+            switch ($status) {
+                case 400:
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Dokter tidak tersedia pada jam ini. Silakan pilih waktu lain',
+                        'timestamp' => now()->toISOString(),
+                    ], 400);
+                case 401:
+                    return response()->json([
+                        'message' => 'Unauthenticated.',
+                    ], 401);
+                case 403:
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Hanya pasien yang dapat membuat janji temu',
+                        'timestamp' => now()->toISOString(),
+                    ], 403);
+                case 409:
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Maaf, jadwal ini bertabrakan dengan janji dokter tersebut',
+                        'timestamp' => now()->toISOString(),
+                    ], 409);
+                case 422:
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Mohon periksa kembali data yang Anda masukkan',
+                        'errors' => $body['errors'] ?? $body,
+                        'timestamp' => now()->toISOString(),
+                    ], 422);
+                default:
+                    // Pass-through message jika ada, fallback ke pesan umum
+                    $msg = $body['message'] ?? 'Maaf, terjadi kesalahan saat membooking janji temu';
+                    return response()->json([
+                        'success' => false,
+                        'message' => $msg,
+                        'timestamp' => now()->toISOString(),
+                    ], $status ?: 500);
+            }
         } catch (\Throwable $e) {
             Log::error('Booking cepat error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json([
                 'success' => false,
                 'message' => 'Maaf, terjadi kesalahan saat membooking janji temu',
-                'debug' => config('app.debug') ? $e->getMessage() : null,
                 'timestamp' => now()->toISOString(),
             ], 500);
         }
@@ -194,7 +255,6 @@ class JanjiTemuController extends Controller
     public function updateJanjiTemu(Request $request, $id): JsonResponse
     {
         $token = $request->bearerToken();
-
         if (!$token) {
             return response()->json([
                 'success' => false,

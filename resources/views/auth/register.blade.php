@@ -130,7 +130,7 @@
                         <input type="password" id="password" name="password" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition" placeholder="••••••••">
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">No. Telepon (opsional)</label>
+                        <label id="labelNoTelepon" class="block text-sm font-semibold text-gray-700 mb-2">No. Telepon (opsional)</label>
                         <input type="text" id="no_telepon" name="no_telepon" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition" placeholder="08xxxxxxxxxx">
                     </div>
 
@@ -150,6 +150,11 @@
                                 <option value="pagi">Pagi</option>
                                 <option value="malam">Malam</option>
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Biaya Konsultasi</label>
+                            <input type="number" id="biaya" name="biaya" min="0" step="1000" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition" placeholder="Contoh: 150000">
+                            <p class="text-xs text-gray-500 mt-1">Gunakan rupiah tanpa titik/koma.</p>
                         </div>
                     </div>
 
@@ -195,6 +200,12 @@
             dokterFields.classList.add('hidden');
             rolePasienBtn.className = 'px-4 py-2 rounded-xl border border-emerald-300 text-emerald-700 bg-emerald-50 font-semibold';
             roleDokterBtn.className = 'px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50';
+
+            // Pasien: no_telepon tidak wajib, biaya tidak berlaku
+            document.getElementById('no_telepon')?.removeAttribute('required');
+            const labelNoTel = document.getElementById('labelNoTelepon');
+            if (labelNoTel) labelNoTel.textContent = 'No. Telepon (opsional)';
+            document.getElementById('biaya')?.removeAttribute('required');
         });
 
         roleDokterBtn.addEventListener('click', function () {
@@ -202,6 +213,12 @@
             dokterFields.classList.remove('hidden');
             roleDokterBtn.className = 'px-4 py-2 rounded-xl border border-emerald-300 text-emerald-700 bg-emerald-50 font-semibold';
             rolePasienBtn.className = 'px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50';
+
+            // Dokter: no_telepon dan biaya wajib
+            document.getElementById('no_telepon')?.setAttribute('required', 'true');
+            const labelNoTel = document.getElementById('labelNoTelepon');
+            if (labelNoTel) labelNoTel.textContent = 'No. Telepon (wajib)';
+            document.getElementById('biaya')?.setAttribute('required', 'true');
         });
 
         document.getElementById('registerForm').addEventListener('submit', async function (e) {
@@ -215,6 +232,8 @@
             const spesialisasi = document.getElementById('spesialisasi')?.value || undefined;
             const no_lisensi = document.getElementById('no_lisensi')?.value || undefined;
             const shift = document.getElementById('shift')?.value || undefined;
+            const biayaInput = document.getElementById('biaya')?.value || undefined;
+            const biaya_konsultasi = biayaInput ? parseInt(biayaInput, 10) : undefined;
 
             const registerButton = document.getElementById('registerButton');
             const buttonText = document.getElementById('buttonText');
@@ -239,6 +258,13 @@
                     no_telepon,
                     ...(role === 'dokter' ? { spesialisasi, no_lisensi, shift } : {})
                 };
+
+                if (role === 'dokter') {
+                    // Sertakan biaya_konsultasi untuk dokter; input bertipe number dan required saat peran dokter
+                    if (typeof biaya_konsultasi !== 'undefined' && !Number.isNaN(biaya_konsultasi)) {
+                        payload.biaya_konsultasi = biaya_konsultasi;
+                    }
+                }
 
                 const res = await fetch(endpoint, {
                     method: 'POST',

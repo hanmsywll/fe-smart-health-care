@@ -29,6 +29,14 @@
                     <label class="block text-sm text-gray-600 mb-1">Keluhan (opsional)</label>
                     <textarea id="editCatatan" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"></textarea>
                 </div>
+                <!-- Assign ke Dokter lain (khusus role Dokter) -->
+                <div id="assignDoctorContainer" class="hidden">
+                    <label class="block text-sm text-gray-600 mb-1">Assign ke Dokter Lain</label>
+                    <select id="assignDoctorSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                        <option value="">— Tidak mengubah dokter —</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Pilih dokter lain jika Anda tidak bisa hadir. Sistem akan memvalidasi shift dan bentrok jadwal.</p>
+                </div>
             </div>
             <div class="flex items-center justify-end gap-2 p-4 border-t border-gray-100">
                 <button onclick="closeEditJanjiModal()" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Batal</button>

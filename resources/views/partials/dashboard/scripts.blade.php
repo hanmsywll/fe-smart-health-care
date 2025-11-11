@@ -33,6 +33,39 @@
         }
     }
 
+    // Normalisasi nilai sort: menerima 'terbaru'/'desc' => 'desc', 'terlama'/'asc' => 'asc'
+    function normalizeSortValue(raw) {
+        const v = String(raw || '').toLowerCase();
+        if (v === 'desc' || v === 'terbaru') return 'desc';
+        if (v === 'asc' || v === 'terlama') return 'asc';
+        return '';
+    }
+
+    // Sorting berdasarkan tanggal_janji (primer) lalu waktu_mulai (sekunder)
+    function applySortByDateTime(items, dir) {
+        const d = normalizeSortValue(dir);
+        if (!Array.isArray(items) || !d) return items;
+        const sign = (d === 'desc') ? -1 : 1;
+        const parseDate = (s) => {
+            try { return new Date(normalizeDateString(s || '')); } catch (_) { return new Date('1970-01-01'); }
+        };
+        const parseTime = (s) => {
+            const t = String(s || '').slice(0,5);
+            const [h, m] = t.split(':').map(n => parseInt(n || '0', 10));
+            return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+        };
+        return [...items].sort((a, b) => {
+            const da = parseDate(a?.tanggal_janji ?? a?.tanggal);
+            const db = parseDate(b?.tanggal_janji ?? b?.tanggal);
+            const cmpDate = (da.getTime() - db.getTime());
+            if (cmpDate !== 0) return sign * (cmpDate > 0 ? 1 : -1);
+            const ta = parseTime(a?.waktu_mulai);
+            const tb = parseTime(b?.waktu_mulai);
+            const cmpTime = (ta - tb);
+            return sign * (cmpTime > 0 ? 1 : (cmpTime < 0 ? -1 : 0));
+        });
+    }
+
     // Parse tanggal + waktu sebagai waktu WIB (+07:00) untuk penentuan mendatang
     function parseWIBDateTime(tanggal, waktu) {
         const t = normalizeDateString(tanggal || '');
@@ -71,8 +104,28 @@
         }
 
         items.forEach((it) => {
-            const doctorName = it?.dokter?.pengguna?.nama_lengkap || it?.dokter?.pengguna?.name || 'Dokter';
-            const specialization = it?.dokter?.spesialisasi || 'Dokter';
+            // Tentukan nama yang ditampilkan berdasarkan role:
+            // - Pasien: tampilkan nama dokter
+            // - Dokter: tampilkan nama pasien
+            const role = (function() {
+                try {
+                    if (window.APP_ROLE) return String(window.APP_ROLE);
+                    const u = JSON.parse(localStorage.getItem('user') || '{}');
+                    return String(u?.role || u?.roles?.[0] || '');
+                } catch (_) { return ''; }
+            })();
+            const isDoctorRole = /dokter/i.test(role || '');
+            const namePrimary = isDoctorRole
+                ? (it?.pasien?.pengguna?.nama_lengkap || it?.pasien?.pengguna?.name || it?.pasien?.nama || 'Pasien')
+                : (it?.dokter?.pengguna?.nama_lengkap || it?.dokter?.pengguna?.name || it?.dokter?.nama || 'Dokter');
+            // Teks kecil (secondary):
+            // - Dokter: tampilkan keluhan/catatan pasien
+            // - Pasien: tetap tampilkan spesialisasi dokter
+            const keluhanTextRaw = it?.keluhan ?? it?.catatan ?? '';
+            const truncate = (s, n) => (typeof s === 'string' && s.length > n) ? (s.slice(0, n) + '…') : s;
+            const secondaryText = isDoctorRole
+                ? (keluhanTextRaw ? truncate(keluhanTextRaw, 80) : '')
+                : (it?.dokter?.spesialisasi || 'Dokter');
             let dateStr = '';
             try {
                 dateStr = it?.tanggal_janji ? new Date(it.tanggal_janji).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
@@ -91,8 +144,8 @@
                     </svg>
                 </div>
                 <div class="flex-1">
-                    <h3 class="font-semibold text-gray-900">${doctorName}</h3>
-                    <p class="text-sm text-gray-500">${specialization}</p>
+                    <h3 class="font-semibold text-gray-900">${namePrimary}</h3>
+                    <p class="text-sm text-gray-500">${secondaryText}</p>
                     <div class="flex items-center gap-4 mt-2 text-sm">
                         <span class="flex items-center gap-1 text-gray-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,8 +164,10 @@
                 <div class="flex items-center gap-2">
                     <span class="px-3 py-1 ${bg} ${text} rounded-full text-xs font-semibold">${statusText}</span>
                     ${id ? `
-                    <button title="Edit" onclick=\"event.stopPropagation();openEditJanji('${id}','${normalizeDateString(it?.tanggal_janji)}','${it?.waktu_mulai || ''}','${it?.waktu_selesai || ''}')\" class="p-2 rounded-lg text-gray-500 hover:text-emerald-700 hover:bg-emerald-50">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4h2a2 2 0 012 2v2m-4-4a2 2 0 00-2 2v2m6 0h2a2 2 0 012 2v2m-4-4a2 2 0 00-2 2v2m6 0h2a2 2 0 012 2v2m-4-4a2 2 0 00-2 2v2"/></svg>
+                    <button title="Edit" onclick=\"event.stopPropagation();openEditJanji('${id}','${normalizeDateString(it?.tanggal_janji)}','${it?.waktu_mulai || ''}','${it?.waktu_selesai || ''}','${encodeURIComponent(it?.keluhan ?? it?.catatan ?? '')}')\" class="p-2 rounded-lg text-gray-500 hover:text-emerald-700 hover:bg-emerald-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 012-2h0a2 2 0 012 2v0m-2.879 5.121l6.758 6.758M4 16.5V20h3.5l9.879-9.879a2.5 2.5 0 000-3.536l-1.964-1.964a2.5 2.5 0 00-3.536 0L4 16.5z" />
+                        </svg>
                     </button>
                     <button title="Hapus" onclick=\"event.stopPropagation();deleteJanji('${id}')\" class="p-2 rounded-lg text-gray-500 hover:text-red-700 hover:bg-red-50">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0h-2m-6 0H7m2-2h6a2 2 0 012 2v0H7v0a2 2 0 012-2z"/></svg>
@@ -177,11 +232,53 @@
             return;
         }
         const tgl = document.getElementById('searchTanggal')?.value || '';
-        const dokter = document.getElementById('searchDokter')?.value || '';
-        const pasien = document.getElementById('searchPasien')?.value || '';
+        let dokter = document.getElementById('searchDokter')?.value || '';
+        let pasien = document.getElementById('searchPasien')?.value || '';
+        const sortRaw = document.getElementById('searchSort')?.value || '';
+        const sortVal = normalizeSortValue(sortRaw);
 
-        if (!tgl && !dokter && !pasien) {
-            showToast('Isi pencarian', 'Masukkan tanggal, nama dokter, atau nama pasien.');
+        // Role-based akses filter: Dokter hanya cari pasien, Pasien hanya cari dokter
+        const role = (function() {
+            try {
+                if (window.APP_ROLE) return String(window.APP_ROLE);
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                return String(u?.role || u?.roles?.[0] || '');
+            } catch (_) { return ''; }
+        })();
+        const isDoctorRole = /dokter/i.test(role || '');
+        const isPatientRole = /pasien/i.test(role || '');
+        if (isDoctorRole) { dokter = ''; }
+        if (isPatientRole) { pasien = ''; }
+
+        if (!tgl && !dokter && !pasien && !sortVal) {
+            showToast('Isi pencarian', 'Masukkan tanggal, nama dokter, atau nama pasien, atau pilih urutan.');
+            return;
+        }
+
+        // Jika hanya sort yang dipilih tanpa filter lain, gunakan endpoint daftar janji dengan sort
+        if (!tgl && !dokter && !pasien && sortVal) {
+            try {
+                const base = 'https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji';
+                const url = `${base}?sort=${encodeURIComponent(sortVal)}`;
+                const res = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (res.status === 401) {
+                    window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
+                    return;
+                }
+                const body = await res.json().catch(() => ({}));
+                let items = body?.data || body || [];
+                if (!Array.isArray(items)) items = [];
+                setAppointments(items);
+                const label = (sortVal === 'desc') ? 'Terbaru' : 'Terlama';
+                showToast('Diurutkan', `Daftar janji diurutkan: ${label}.`);
+            } catch (_) {
+                showToast('Jaringan bermasalah', 'Gagal mengambil daftar janji terurut.');
+            }
             return;
         }
 
@@ -238,9 +335,8 @@
                 return matchDate && matchName && matchPatient;
             });
 
-            const ordered = orderAppointmentsForUpcoming(filtered);
-            const renderedList = ordered.length ? ordered : filtered;
-            setAppointments(renderedList);
+            const toRender = sortVal ? applySortByDateTime(filtered, sortVal) : (orderAppointmentsForUpcoming(filtered).length ? orderAppointmentsForUpcoming(filtered) : filtered);
+            setAppointments(toRender);
             const msg = body?.message || (items.length ? `Berhasil menemukan ${items.length} janji temu` : 'Tidak ada janji temu yang sesuai');
             showToast('Hasil Pencarian', msg);
         } catch (_) {
@@ -272,6 +368,7 @@
                 ${patientName ? `<div><span class='text-gray-500'>Pasien:</span> <span class='font-medium'>${patientName}</span></div>` : ''}
                 <div><span class="text-gray-500">Tanggal:</span> <span class="font-medium">${dateStr}</span></div>
                 <div><span class="text-gray-500">Waktu:</span> <span class="font-medium">${timeStr ? timeStr + ' WIB' : '-'}</span></div>
+                ${data?.keluhan ? `<div><span class='text-gray-500'>Keluhan:</span> <span class='font-medium'>${data.keluhan}</span></div>` : ''}
                 ${data?.catatan ? `<div><span class='text-gray-500'>Catatan:</span> <span class='font-medium'>${data.catatan}</span></div>` : ''}
             </div>
         `;
@@ -283,7 +380,7 @@
         document.getElementById('janjiModal').classList.add('hidden');
     }
 
-    function openEditJanji(id, tanggal, mulai, selesai) {
+    function openEditJanji(id, tanggal, mulai, selesai, keluhan) {
         const modal = document.getElementById('editJanjiModal');
         document.getElementById('editJanjiId').value = id || '';
         document.getElementById('editTanggal').value = normalizeDateString(tanggal || '');
@@ -309,6 +406,66 @@
                 endInput.value = '';
             }
         };
+        // Isi keluhan/catatan sebelumnya ke textarea
+        const keluhanInput = document.getElementById('editCatatan');
+        try {
+            keluhanInput.value = keluhan ? decodeURIComponent(keluhan) : '';
+        } catch (_) {
+            keluhanInput.value = keluhan || '';
+        }
+
+        // Tampilkan dan muat dropdown assign dokter jika role adalah Dokter
+        const assignContainer = document.getElementById('assignDoctorContainer');
+        const assignSelect = document.getElementById('assignDoctorSelect');
+        const role = (function() {
+            try {
+                if (window.APP_ROLE) return String(window.APP_ROLE);
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                return String(u?.role || u?.roles?.[0] || '');
+            } catch (_) { return ''; }
+        })();
+        const isDoctorRole = /dokter/i.test(role || '');
+        if (assignContainer) {
+            if (isDoctorRole) {
+                assignContainer.classList.remove('hidden');
+                if (assignSelect) {
+                    // Reset options setiap kali modal dibuka
+                    assignSelect.innerHTML = '<option value="">— Tidak mengubah dokter —</option>';
+                    // Cache sederhana agar tidak selalu memanggil API
+                    window._assignDoctorsList = window._assignDoctorsList || null;
+                    (async function loadDoctors() {
+                        try {
+                            if (!window._assignDoctorsList) {
+                                const res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/ketersediaan', {
+                                    headers: { 'Accept': 'application/json' }
+                                });
+                                const data = await res.json().catch(() => []);
+                                window._assignDoctorsList = Array.isArray(data) ? data : [];
+                            }
+                            const list = window._assignDoctorsList || [];
+                            list.forEach(d => {
+                                const idOpt = d?.id_dokter ?? d?.id;
+                                const namaOpt = d?.nama_dokter ?? d?.nama ?? 'Dokter';
+                                const spes = d?.spesialisasi ? ` (${d.spesialisasi})` : '';
+                                const shiftLabel = d?.shift ? ` — Shift ${d.shift}` : '';
+                                const opt = document.createElement('option');
+                                opt.value = String(idOpt || '');
+                                opt.textContent = `${namaOpt}${spes}${shiftLabel}`;
+                                assignSelect.appendChild(opt);
+                            });
+                        } catch (_) {
+                            const opt = document.createElement('option');
+                            opt.value = '';
+                            opt.disabled = true;
+                            opt.textContent = 'Gagal memuat daftar dokter';
+                            assignSelect.appendChild(opt);
+                        }
+                    })();
+                }
+            } else {
+                assignContainer.classList.add('hidden');
+            }
+        }
         modal.classList.remove('hidden');
     }
 
@@ -341,49 +498,131 @@
         const mulai = document.getElementById('editMulai').value;
         const selesai = document.getElementById('editSelesai').value;
         const catatan = document.getElementById('editCatatan').value;
+        const assignSelectEarly = document.getElementById('assignDoctorSelect');
+        let assignDoctorId = null;
+        try {
+            if (assignSelectEarly && assignSelectEarly.value) {
+                const parsed = parseInt(assignSelectEarly.value, 10);
+                if (Number.isFinite(parsed)) assignDoctorId = parsed;
+            }
+        } catch (_) {}
+        const isReassign = Number.isFinite(assignDoctorId);
 
         if (!id) {
             showToast('Gagal', 'ID janji tidak valid.');
             return;
         }
-        if (!tanggal || !mulai) {
+        if (!isReassign && (!tanggal || !mulai)) {
             showToast('Data belum lengkap', 'Tanggal dan waktu mulai wajib diisi.');
             return;
         }
 
-        try {
-            const now = new Date();
-            const selectedDate = new Date(tanggal + 'T00:00:00');
-            const [hMulai, mMulai] = (mulai || '').split(':').map(Number);
-            if (Number.isFinite(hMulai) && Number.isFinite(mMulai)) {
-                selectedDate.setHours(hMulai, mMulai, 0, 0);
+        if (!isReassign) {
+            try {
+                const now = new Date();
+                const selectedDate = new Date(tanggal + 'T00:00:00');
+                const [hMulai, mMulai] = (mulai || '').split(':').map(Number);
+                if (Number.isFinite(hMulai) && Number.isFinite(mMulai)) {
+                    selectedDate.setHours(hMulai, mMulai, 0, 0);
+                }
+                const startIsPast = selectedDate.getTime() < now.getTime();
+                if (startIsPast) {
+                    showToast('Waktu tidak valid', 'Tidak boleh mengatur janji di waktu yang sudah lewat.');
+                    return;
+                }
+            } catch (_) {
             }
-            const startIsPast = selectedDate.getTime() < now.getTime();
-            if (startIsPast) {
-                showToast('Waktu tidak valid', 'Tidak boleh mengatur janji di waktu yang sudah lewat.');
-                return;
-            }
-        } catch (_) {
-
         }
 
-        const payload = {
-            tanggal_janji: tanggal,
-            waktu_mulai: mulai,
-            ...(selesai ? { waktu_selesai: selesai } : {}),
-            ...(catatan ? { keluhan: catatan } : {}),
+        // Susun payload sesuai spesifikasi Swagger:
+        // - Assign dokter (role dokter): kirim hanya { id_dokter }
+        // - Update jadwal/keluhan: gunakan { tanggal_janji, waktu_mulai, waktu_selesai?, keluhan? }
+        let payload;
+        let attemptType;
+        if (isReassign) {
+            payload = { id_dokter: assignDoctorId };
+            attemptType = 'doctor_only';
+        } else {
+            payload = {
+                tanggal_janji: tanggal,
+                waktu_mulai: mulai,
+                ...(catatan ? { keluhan: catatan } : {}),
+            };
+            attemptType = 'schedule';
+        }
+
+        // Jika bukan reassign, abaikan blok ini
+
+        // ==== DEBUG PANEL & LOGGING ====
+        const headersObj = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-CSRF-TOKEN': csrf,
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+
+        const endpoint = `janji/${encodeURIComponent(id)}`;
+        const userData = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch (_) { return {}; } })();
+        const role = (window.APP_ROLE) || userData?.role || userData?.roles?.[0] || 'unknown';
+        const debugInfo = {
+            action: 'submitEditJanji',
+            method: 'PUT',
+            endpoint,
+            role,
+            id,
+            payload,
+            headers: {
+                ...headersObj,
+                Authorization: token ? `Bearer ${String(token).slice(0, 10)}…` : ''
+            },
+            timestamp: new Date().toISOString()
         };
 
         try {
-            const res = await fetch(`https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/${encodeURIComponent(id)}`, {
+            // Console logging
+            console.group('Edit Janji Debug');
+            console.log('Request:', debugInfo);
+            console.groupEnd();
+
+            // Floating debug panel
+            (function renderEditDebug(info) {
+                const panelId = 'editDebugPanel';
+                let panel = document.getElementById(panelId);
+                if (!panel) {
+                    panel = document.createElement('div');
+                    panel.id = panelId;
+                    panel.style.position = 'fixed';
+                    panel.style.right = '12px';
+                    panel.style.bottom = '12px';
+                    panel.style.zIndex = '9999';
+                    panel.style.width = '380px';
+                    panel.style.maxHeight = '55vh';
+                    panel.style.overflow = 'auto';
+                    panel.style.background = '#ffffff';
+                    panel.style.border = '1px solid #e5e7eb';
+                    panel.style.borderRadius = '8px';
+                    panel.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
+                    panel.innerHTML = `
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #eee;background:#f9fafb;">
+                            <strong style="font-size:13px;color:#111827;">Debug Edit Janji</strong>
+                            <div>
+                                <button id="editDebugClose" style="font-size:12px;padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;cursor:pointer;">Tutup</button>
+                            </div>
+                        </div>
+                        <pre id="editDebugContent" style="margin:0;padding:10px 12px;font-size:12px;line-height:1.5;color:#374151;white-space:pre-wrap;"></pre>
+                    `;
+                    document.body.appendChild(panel);
+                    const btn = panel.querySelector('#editDebugClose');
+                    btn.addEventListener('click', () => panel.remove());
+                }
+                const pre = panel.querySelector('#editDebugContent');
+                if (pre) pre.textContent = JSON.stringify(info, null, 2);
+            })(debugInfo);
+
+            let res = await fetch(endpoint, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CSRF-TOKEN': csrf,
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
+                headers: headersObj,
                 body: JSON.stringify(payload)
             });
 
@@ -393,6 +632,24 @@
             }
 
             const body = await res.json().catch(() => ({}));
+            // Update debug panel dengan respons
+            try {
+                const panel = document.getElementById('editDebugPanel');
+                const pre = panel?.querySelector('#editDebugContent');
+                if (pre) {
+                    const latest = {
+                        ...debugInfo,
+                        response: {
+                            status: res.status,
+                            ok: res.ok,
+                            body
+                        }
+                    };
+                    pre.textContent = JSON.stringify(latest, null, 2);
+                }
+            } catch (_) {}
+
+            // Tidak ada retry tambahan untuk reassign; payload sudah minimal sesuai spesifikasi
 
             if (res.ok) {
                 showToast('Berhasil', body?.message || 'Jadwal janji temu berhasil diperbarui');
@@ -463,14 +720,29 @@
             return;
         }
         const tgl = document.getElementById('searchTanggal')?.value || '';
-        const dokter = document.getElementById('searchDokter')?.value || '';
-        const pasien = document.getElementById('searchPasien')?.value || '';
+        let dokter = document.getElementById('searchDokter')?.value || '';
+        let pasien = document.getElementById('searchPasien')?.value || '';
+        const sortRaw = document.getElementById('searchSort')?.value || '';
+        const sortVal = normalizeSortValue(sortRaw);
+        const role = (function() {
+            try {
+                if (window.APP_ROLE) return String(window.APP_ROLE);
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                return String(u?.role || u?.roles?.[0] || '');
+            } catch (_) { return ''; }
+        })();
+        const isDoctorRole = /dokter/i.test(role || '');
+        const isPatientRole = /pasien/i.test(role || '');
+        if (isDoctorRole) { dokter = ''; }
+        if (isPatientRole) { pasien = ''; }
         if (tgl || dokter || pasien) {
             await cariJanji();
             return;
         }
         try {
-            const res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji', {
+            const base = 'https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji';
+            const url = sortVal ? `${base}?sort=${encodeURIComponent(sortVal)}` : base;
+            const res = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -483,8 +755,7 @@
             const body = await res.json().catch(() => ({}));
             let items = body?.data || body || [];
             if (!Array.isArray(items)) items = [];
-            const ordered = orderAppointmentsForUpcoming(items);
-            const renderedList = ordered.length ? ordered : items;
+            const renderedList = sortVal ? items : (orderAppointmentsForUpcoming(items).length ? orderAppointmentsForUpcoming(items) : items);
             setAppointments(renderedList);
         } catch (_) {}
     }
@@ -593,6 +864,31 @@
             window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
             return;
         }
+        // Atur visibilitas input pencarian berdasarkan role
+        try {
+            const role = (function() {
+                try {
+                    if (window.APP_ROLE) return String(window.APP_ROLE);
+                    const u = JSON.parse(localStorage.getItem('user') || '{}');
+                    return String(u?.role || u?.roles?.[0] || '');
+                } catch (_) { return ''; }
+            })();
+            const isDoctorRole = /dokter/i.test(role || '');
+            const isPatientRole = /pasien/i.test(role || '');
+            const dokterInput = document.getElementById('searchDokter');
+            const pasienInput = document.getElementById('searchPasien');
+            if (isDoctorRole) {
+                if (dokterInput) { dokterInput.classList.add('hidden'); dokterInput.value = ''; }
+                if (pasienInput) { pasienInput.classList.remove('hidden'); }
+            } else if (isPatientRole) {
+                if (pasienInput) { pasienInput.classList.add('hidden'); pasienInput.value = ''; }
+                if (dokterInput) { dokterInput.classList.remove('hidden'); }
+            } else {
+                // Admin/other: tampilkan keduanya
+                if (dokterInput) { dokterInput.classList.remove('hidden'); }
+                if (pasienInput) { pasienInput.classList.remove('hidden'); }
+            }
+        } catch (_) {}
         let pending = null;
         try { pending = JSON.parse(localStorage.getItem('pendingBooking')); } catch (_) { }
         if (!token) {
@@ -646,7 +942,11 @@
         }
 
         try {
-            const res = await fetch('/janji', {
+            const sortRaw = document.getElementById('searchSort')?.value || '';
+            const sortVal = normalizeSortValue(sortRaw);
+            const base = '/janji';
+            const url = sortVal ? `${base}?sort=${encodeURIComponent(sortVal)}` : base;
+            const res = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -660,8 +960,7 @@
             const body = await res.json();
             let items = body?.data || body || [];
             if (!Array.isArray(items)) items = [];
-            const ordered = orderAppointmentsForUpcoming(items);
-            const renderedList = ordered.length ? ordered : items;
+            const renderedList = sortVal ? items : (orderAppointmentsForUpcoming(items).length ? orderAppointmentsForUpcoming(items) : items);
             setAppointments(renderedList);
         } catch (_) {
         }
