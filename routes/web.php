@@ -42,13 +42,18 @@ Route::post('/register/pasien', [AuthController::class, 'registerPasien']);
 Route::post('/register/dokter', [AuthController::class, 'registerDokter']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// Medical Records (basic CRUD)
-Route::get('/medical-records', [MedicalRecordController::class, 'index'])->name('medical-records.index');
-Route::get('/medical-records/create', [MedicalRecordController::class, 'create'])->name('medical-records.create');
-Route::post('/medical-records', [MedicalRecordController::class, 'store'])->name('medical-records.store');
-Route::get('/medical-records/{id}/edit', [MedicalRecordController::class, 'edit'])->name('medical-records.edit');
-Route::put('/medical-records/{id}', [MedicalRecordController::class, 'update'])->name('medical-records.update');
-Route::delete('/medical-records/{id}', [MedicalRecordController::class, 'destroy'])->name('medical-records.destroy');
+// // Medical Records (basic CRUD)
+// Route::get('/medical-records', [MedicalRecordController::class, 'index'])->name('medical-records.index');
+// Route::get('/medical-records/create', [MedicalRecordController::class, 'create'])->name('medical-records.create');
+// Route::post('/medical-records', [MedicalRecordController::class, 'store'])->name('medical-records.store');
+// Route::get('/medical-records/{id}/edit', [MedicalRecordController::class, 'edit'])->name('medical-records.edit');
+// Route::put('/medical-records/{id}', [MedicalRecordController::class, 'update'])->name('medical-records.update');
+// Route::delete('/medical-records/{id}', [MedicalRecordController::class, 'destroy'])->name('medical-records.destroy');
+
+Route::get('/rekam-medis', function () {
+    return view('rekammedis');
+})->name('rekam-medis');
+
 Route::get('/debug/time', function () {
     $appTz = config('app.timezone');
     $phpTz = \date_default_timezone_get();

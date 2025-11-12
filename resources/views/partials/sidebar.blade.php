@@ -39,7 +39,7 @@
                     </a>
                 </li>
                 <li>
-                    <a href="#rekam-medis"
+                    <a href="/rekam-medis"
                         class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition">
                         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
