@@ -33,6 +33,20 @@
         }
     }
 
+    // ===== Endpoint URL Helpers (seragam) =====
+    function getApiBase() {
+        try {
+            if (window.API_BASE) return String(window.API_BASE).replace(/\/$/, '');
+        } catch (_) {}
+        return 'https://smart-healthcare-system-production-6e7c.up.railway.app/api';
+    }
+    function apiUrl(path) {
+        return getApiBase() + '/' + String(path || '').replace(/^\/+/, '');
+    }
+    function localUrl(path) {
+        return '/' + String(path || '').replace(/^\/+/, '');
+    }
+
     // Normalisasi nilai sort: menerima 'terbaru'/'desc' => 'desc', 'terlama'/'asc' => 'asc'
     function normalizeSortValue(raw) {
         const v = String(raw || '').toLowerCase();
@@ -258,7 +272,7 @@
         // Jika hanya sort yang dipilih tanpa filter lain, gunakan endpoint daftar janji dengan sort
         if (!tgl && !dokter && !pasien && sortVal) {
             try {
-                const base = 'https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji';
+                const base = apiUrl('janji');
                 const url = `${base}?sort=${encodeURIComponent(sortVal)}`;
                 const res = await fetch(url, {
                     headers: {
@@ -288,7 +302,7 @@
         if (pasien) qs.set('nama_pasien', pasien);
 
         try {
-            let res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/cari?' + qs.toString(), {
+            let res = await fetch(apiUrl('janji/cari') + '?' + qs.toString(), {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -436,7 +450,7 @@
                     (async function loadDoctors() {
                         try {
                             if (!window._assignDoctorsList) {
-                                const res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/ketersediaan', {
+                                const res = await fetch(apiUrl('janji/ketersediaan'), {
                                     headers: { 'Accept': 'application/json' }
                                 });
                                 const data = await res.json().catch(() => []);
@@ -562,7 +576,7 @@
             'X-Requested-With': 'XMLHttpRequest'
         };
 
-        const endpoint = `janji/${encodeURIComponent(id)}`;
+        const endpoint = localUrl('janji/' + encodeURIComponent(id));
         const userData = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch (_) { return {}; } })();
         const role = (window.APP_ROLE) || userData?.role || userData?.roles?.[0] || 'unknown';
         const debugInfo = {
@@ -684,7 +698,7 @@
         const ok = window.confirm('Yakin ingin membatalkan janji ini?');
         if (!ok) return;
         try {
-            const res = await fetch(`/janji/${encodeURIComponent(id)}`, {
+            const res = await fetch(localUrl('janji/' + encodeURIComponent(id)), {
                 method: 'DELETE',
                 headers: {
                     'Accept': 'application/json',
@@ -740,7 +754,7 @@
             return;
         }
         try {
-            const base = 'https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji';
+            const base = apiUrl('janji');
             const url = sortVal ? `${base}?sort=${encodeURIComponent(sortVal)}` : base;
             const res = await fetch(url, {
                 headers: {
@@ -767,7 +781,7 @@
             return;
         }
         try {
-            const res = await fetch(`/janji/${id}`, {
+            const res = await fetch(localUrl('janji/' + id), {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
