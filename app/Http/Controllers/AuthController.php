@@ -8,6 +8,13 @@ use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
+    public function showRegister()
+    {
+        $redirectUrl = request()->query('redirect', '/login');
+
+        return view('auth.register', ['redirectUrl' => $redirectUrl]);
+    }
+
     public function showLogin()
     {
         $redirectUrl = request()->query('redirect', '/dashboard');
@@ -123,5 +130,83 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
         ]);
+    }
+
+    /**
+     * Proxy registrasi pasien ke API Gateway
+     */
+    public function registerPasien(Request $request, ApiGateway $gateway)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string|min:6',
+            'nama_lengkap' => 'required|string',
+            'no_telepon' => 'nullable|string',
+        ]);
+
+        $payload = [
+            'email' => $request->input('email'),
+            'password' => $request->input('password'),
+            'nama_lengkap' => $request->input('nama_lengkap'),
+            'no_telepon' => $request->input('no_telepon'),
+        ];
+
+        try {
+            $result = $gateway->post('auth/register/pasien', $payload);
+            return response()->json([
+                'success' => true,
+                'data' => $result,
+                'message' => data_get($result, 'message') ?? 'Registrasi pasien berhasil',
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Register pasien error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mendaftar: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Proxy registrasi dokter ke API Gateway
+     */
+    public function registerDokter(Request $request, ApiGateway $gateway)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string|min:6',
+            'nama_lengkap' => 'required|string',
+            'no_telepon' => 'required|string',
+            'spesialisasi' => 'nullable|string',
+            'no_lisensi' => 'nullable|string',
+            'shift' => 'nullable|string',
+            'biaya_konsultasi' => 'required|numeric|min:0',
+        ]);
+
+        $payload = [
+            'email' => $request->input('email'),
+            'password' => $request->input('password'),
+            'nama_lengkap' => $request->input('nama_lengkap'),
+            'no_telepon' => $request->input('no_telepon'),
+            'spesialisasi' => $request->input('spesialisasi'),
+            'no_lisensi' => $request->input('no_lisensi'),
+            'shift' => $request->input('shift'),
+            'biaya_konsultasi' => $request->input('biaya_konsultasi'),
+        ];
+
+        try {
+            $result = $gateway->post('auth/register/dokter', $payload);
+            return response()->json([
+                'success' => true,
+                'data' => $result,
+                'message' => data_get($result, 'message') ?? 'Registrasi dokter berhasil',
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Register dokter error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mendaftar: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

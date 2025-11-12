@@ -177,9 +177,14 @@
                                     <input id="searchTanggal" type="date" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                                     <input id="searchDokter" type="text" placeholder="Nama Dokter" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                                     <input id="searchPasien" type="text" placeholder="Nama Pasien" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                                    <select id="searchSort" class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                                        <option value="">Urutkan</option>
+                                        <option value="terbaru">Terbaru</option>
+                                        <option value="terlama">Terlama</option>
+                                    </select>
                                     <button onclick="cariJanji()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">Cari</button>
                                 </div>
-                                <p class="text-xs text-gray-500">Pencarian dibatasi sesuai role Anda (Pasien/Dokter/Admin). Hasil difilter berdasarkan tanggal, nama dokter, atau nama pasien.</p>
+                                <p class="text-xs text-gray-500">Pencarian dibatasi sesuai role Anda (Pasien/Dokter). Hasil difilter berdasarkan tanggal, nama dokter, atau nama pasien, dan dapat diurutkan Terbaru/Terlama.</p>
                             </div>
                         </div>
                     </div>
