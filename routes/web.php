@@ -50,6 +50,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Route::put('/medical-records/{id}', [MedicalRecordController::class, 'update'])->name('medical-records.update');
 // Route::delete('/medical-records/{id}', [MedicalRecordController::class, 'destroy'])->name('medical-records.destroy');
 
+
 Route::get('/rekam-medis', function () {
     return view('rekammedis');
 })->name('rekam-medis');

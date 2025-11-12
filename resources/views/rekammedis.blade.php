@@ -774,7 +774,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Add Modal -->
     <div id="addModal" class="modal-overlay">
         <div class="modal">
