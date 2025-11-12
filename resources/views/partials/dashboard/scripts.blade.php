@@ -33,6 +33,20 @@
         }
     }
 
+    // ===== Endpoint URL Helpers (seragam) =====
+    function getApiBase() {
+        try {
+            if (window.API_BASE) return String(window.API_BASE).replace(/\/$/, '');
+        } catch (_) { }
+        return 'https://smart-healthcare-system-production-6e7c.up.railway.app/api';
+    }
+    function apiUrl(path) {
+        return getApiBase() + '/' + String(path || '').replace(/^\/+/, '');
+    }
+    function localUrl(path) {
+        return '/' + String(path || '').replace(/^\/+/, '');
+    }
+
     // Normalisasi nilai sort: menerima 'terbaru'/'desc' => 'desc', 'terlama'/'asc' => 'asc'
     function normalizeSortValue(raw) {
         const v = String(raw || '').toLowerCase();
@@ -50,7 +64,7 @@
             try { return new Date(normalizeDateString(s || '')); } catch (_) { return new Date('1970-01-01'); }
         };
         const parseTime = (s) => {
-            const t = String(s || '').slice(0,5);
+            const t = String(s || '').slice(0, 5);
             const [h, m] = t.split(':').map(n => parseInt(n || '0', 10));
             return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
         };
@@ -69,7 +83,7 @@
     // Parse tanggal + waktu sebagai waktu WIB (+07:00) untuk penentuan mendatang
     function parseWIBDateTime(tanggal, waktu) {
         const t = normalizeDateString(tanggal || '');
-        const w = String(waktu || '').slice(0,5);
+        const w = String(waktu || '').slice(0, 5);
         if (!t || !w) return null;
         const iso = `${t}T${w}:00+07:00`;
         try { return new Date(iso); } catch (_) { return null; }
@@ -107,7 +121,7 @@
             // Tentukan nama yang ditampilkan berdasarkan role:
             // - Pasien: tampilkan nama dokter
             // - Dokter: tampilkan nama pasien
-            const role = (function() {
+            const role = (function () {
                 try {
                     if (window.APP_ROLE) return String(window.APP_ROLE);
                     const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -238,7 +252,7 @@
         const sortVal = normalizeSortValue(sortRaw);
 
         // Role-based akses filter: Dokter hanya cari pasien, Pasien hanya cari dokter
-        const role = (function() {
+        const role = (function () {
             try {
                 if (window.APP_ROLE) return String(window.APP_ROLE);
                 const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -258,7 +272,7 @@
         // Jika hanya sort yang dipilih tanpa filter lain, gunakan endpoint daftar janji dengan sort
         if (!tgl && !dokter && !pasien && sortVal) {
             try {
-                const base = 'https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji';
+                const base = apiUrl('janji');
                 const url = `${base}?sort=${encodeURIComponent(sortVal)}`;
                 const res = await fetch(url, {
                     headers: {
@@ -288,7 +302,7 @@
         if (pasien) qs.set('nama_pasien', pasien);
 
         try {
-            let res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/cari?' + qs.toString(), {
+            let res = await fetch(apiUrl('janji/cari') + '?' + qs.toString(), {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -383,11 +397,33 @@
     function openEditJanji(id, tanggal, mulai, selesai, keluhan) {
         const modal = document.getElementById('editJanjiModal');
         document.getElementById('editJanjiId').value = id || '';
+
+        // Ambil token dan role
+        const token = localStorage.getItem('access_token');
+        const role = (function () {
+            try {
+                if (window.APP_ROLE) return String(window.APP_ROLE);
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                return String(u?.role || u?.roles?.[0] || '');
+            } catch (_) { return ''; }
+        })();
+        const isDoctorRole = /dokter/i.test(role || '');
+        const isPatientRole = /pasien/i.test(role || '');
+
+        // Reset form dokter
+        document.getElementById('inputDiagnosis').value = '';
+        document.getElementById('inputTindakan').value = '';
+        document.getElementById('inputCatatanMedis').value = '';
+        document.getElementById('checkboxSelesai').checked = false;
+        document.getElementById('assignDoctorSelect').innerHTML = '<option value="">— Tidak mengubah/mendelegasikan dokter —</option>';
+        document.getElementById('rekamMedisExist').classList.add('hidden');
+
+        // === 1. Isi Form Edit Jadwal (untuk semua role) ===
         document.getElementById('editTanggal').value = normalizeDateString(tanggal || '');
         const startVal = (mulai || '').slice(0, 5);
         const endValRaw = (selesai || '').slice(0, 5);
         document.getElementById('editMulai').value = startVal;
-        // Jika waktu selesai kosong, isi otomatis +1 jam dari waktu mulai
+
         const endInput = document.getElementById('editSelesai');
         if (endValRaw) {
             endInput.value = endValRaw;
@@ -396,7 +432,7 @@
         } else {
             endInput.value = '';
         }
-        // Rehitung otomatis setiap kali waktu mulai berubah
+
         const startInput = document.getElementById('editMulai');
         startInput.oninput = function () {
             const val = (startInput.value || '').slice(0, 5);
@@ -406,41 +442,51 @@
                 endInput.value = '';
             }
         };
-        // Isi keluhan/catatan sebelumnya ke textarea
+
         const keluhanInput = document.getElementById('editCatatan');
+        const keluhanHelpText = document.getElementById('keluhanReadOnlyText');
         try {
             keluhanInput.value = keluhan ? decodeURIComponent(keluhan) : '';
         } catch (_) {
             keluhanInput.value = keluhan || '';
         }
 
-        // Tampilkan dan muat dropdown assign dokter jika role adalah Dokter
-        const assignContainer = document.getElementById('assignDoctorContainer');
-        const assignSelect = document.getElementById('assignDoctorSelect');
-        const role = (function() {
-            try {
-                if (window.APP_ROLE) return String(window.APP_ROLE);
-                const u = JSON.parse(localStorage.getItem('user') || '{}');
-                return String(u?.role || u?.roles?.[0] || '');
-            } catch (_) { return ''; }
-        })();
-        const isDoctorRole = /dokter/i.test(role || '');
-        if (assignContainer) {
-            if (isDoctorRole) {
-                assignContainer.classList.remove('hidden');
-                if (assignSelect) {
-                    // Reset options setiap kali modal dibuka
-                    assignSelect.innerHTML = '<option value="">— Tidak mengubah dokter —</option>';
-                    // Cache sederhana agar tidak selalu memanggil API
-                    window._assignDoctorsList = window._assignDoctorsList || null;
+        // === 2. Ambil detail janji (untuk status & rekam medis) ===
+        // --- DIPERBAIKI: Menggunakan apiUrl ---
+        fetch(apiUrl('janji/' + id), {
+            headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Gagal memuat detail');
+                return res.json();
+            })
+            .then(body => {
+                const data = body?.data || body;
+                const status = (data?.status || '').toLowerCase();
+                document.getElementById('editCurrentStatus').value = status;
+
+                const dokterSection = document.getElementById('dokterSection');
+
+                // === 3. Atur Visibilitas berdasarkan Role ===
+                if (isDoctorRole && status === 'terjadwal') {
+                    dokterSection.classList.remove('hidden');
+                    keluhanInput.readOnly = true;
+                    keluhanHelpText.classList.remove('hidden');
+
+                    // Ambil daftar dokter untuk delegasi
                     (async function loadDoctors() {
+                        const assignSelect = document.getElementById('assignDoctorSelect');
                         try {
                             if (!window._assignDoctorsList) {
-                                const res = await fetch('https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji/ketersediaan', {
+                                // (Ini sudah benar menggunakan apiUrl)
+                                const res = await fetch(apiUrl('janji/ketersediaan'), {
                                     headers: { 'Accept': 'application/json' }
                                 });
-                                const data = await res.json().catch(() => []);
-                                window._assignDoctorsList = Array.isArray(data) ? data : [];
+                                const dataList = await res.json().catch(() => []);
+                                window._assignDoctorsList = Array.isArray(dataList) ? dataList : [];
                             }
                             const list = window._assignDoctorsList || [];
                             list.forEach(d => {
@@ -454,18 +500,53 @@
                                 assignSelect.appendChild(opt);
                             });
                         } catch (_) {
-                            const opt = document.createElement('option');
-                            opt.value = '';
-                            opt.disabled = true;
-                            opt.textContent = 'Gagal memuat daftar dokter';
-                            assignSelect.appendChild(opt);
+                            assignSelect.innerHTML = '<option value="" disabled>Gagal memuat daftar dokter</option>';
                         }
                     })();
+
+                    // Cek apakah rekam medis sudah ada
+                    // --- DIPERBAIKI: Menggunakan apiUrl ---
+                    fetch(apiUrl('rekam-medis'), {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+                        .then(res => res.json())
+                        .then(allRekamMedis => {
+                            const allData = allRekamMedis?.data || allRekamMedis; // Menyesuaikan jika ada bungkus 'data'
+                            const existingRekamMedis = Array.isArray(allData)
+                                ? allData.find(rm => rm.id_janji_temu == id)
+                                : null;
+
+                            const rekamMedisExistDiv = document.getElementById('rekamMedisExist');
+                            if (existingRekamMedis) {
+                                rekamMedisExistDiv.classList.remove('hidden');
+                                document.getElementById('inputDiagnosis').value = existingRekamMedis.diagnosis || '';
+                                document.getElementById('inputTindakan').value = existingRekamMedis.tindakan || '';
+                                document.getElementById('inputCatatanMedis').value = existingRekamMedis.catatan || '';
+                            } else {
+                                rekamMedisExistDiv.classList.add('hidden');
+                            }
+                        })
+                        .catch(() => { });
+
+                } else if (isPatientRole) {
+                    dokterSection.classList.add('hidden');
+                    keluhanInput.readOnly = false;
+                    keluhanHelpText.classList.add('hidden');
+                } else {
+                    dokterSection.classList.add('hidden');
+                    keluhanInput.readOnly = true;
+                    keluhanHelpText.classList.add('hidden');
                 }
-            } else {
-                assignContainer.classList.add('hidden');
-            }
-        }
+            })
+            .catch(() => {
+                showToast('Gagal', 'Tidak bisa memuat detail status janji.');
+                document.getElementById('dokterSection').classList.add('hidden');
+                keluhanInput.readOnly = !isPatientRole;
+            });
+
         modal.classList.remove('hidden');
     }
 
@@ -492,68 +573,167 @@
             window.location.href = '/login?redirect=' + encodeURIComponent('/dashboard');
             return;
         }
+
         const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const id = document.getElementById('editJanjiId').value;
-        const tanggal = document.getElementById('editTanggal').value;
-        const mulai = document.getElementById('editMulai').value;
-        const selesai = document.getElementById('editSelesai').value;
-        const catatan = document.getElementById('editCatatan').value;
-        const assignSelectEarly = document.getElementById('assignDoctorSelect');
-        let assignDoctorId = null;
-        try {
-            if (assignSelectEarly && assignSelectEarly.value) {
-                const parsed = parseInt(assignSelectEarly.value, 10);
-                if (Number.isFinite(parsed)) assignDoctorId = parsed;
-            }
-        } catch (_) {}
-        const isReassign = Number.isFinite(assignDoctorId);
+        const currentStatus = document.getElementById('editCurrentStatus').value;
+
+        const role = (function () {
+            try {
+                if (window.APP_ROLE) return String(window.APP_ROLE);
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                return String(u?.role || u?.roles?.[0] || '');
+            } catch (_) { return ''; }
+        })();
+        const isDoctorRole = /dokter/i.test(role || '');
+        const isPatientRole = /pasien/i.test(role || '');
 
         if (!id) {
             showToast('Gagal', 'ID janji tidak valid.');
             return;
         }
-        if (!isReassign && (!tanggal || !mulai)) {
-            showToast('Data belum lengkap', 'Tanggal dan waktu mulai wajib diisi.');
-            return;
-        }
 
-        if (!isReassign) {
-            try {
-                const now = new Date();
-                const selectedDate = new Date(tanggal + 'T00:00:00');
-                const [hMulai, mMulai] = (mulai || '').split(':').map(Number);
-                if (Number.isFinite(hMulai) && Number.isFinite(mMulai)) {
-                    selectedDate.setHours(hMulai, mMulai, 0, 0);
+        let payload = {};
+        let endpoint = apiUrl('janji/' + encodeURIComponent(id));
+        let method = 'PUT';
+
+        // === LOGIKA UNTUK DOKTER ===
+        if (isDoctorRole && currentStatus === 'terjadwal') {
+            const assignDoctorId = document.getElementById('assignDoctorSelect')?.value;
+            const checkSelesai = document.getElementById('checkboxSelesai').checked;
+            const tanggal = document.getElementById('editTanggal').value;
+            const mulai = document.getElementById('editMulai').value;
+
+            // PRIORITAS 1: Mendelegasikan Janji
+            if (assignDoctorId && assignDoctorId !== "") {
+                payload = { id_dokter: parseInt(assignDoctorId, 10) };
+
+                // PRIORITAS 2: Menyelesaikan Janji (Input Rekam Medis)
+            } else if (checkSelesai) {
+                const diagnosis = document.getElementById('inputDiagnosis').value.trim();
+                const tindakan = document.getElementById('inputTindakan').value.trim();
+                const catatanMedis = document.getElementById('inputCatatanMedis').value.trim();
+
+                if (!diagnosis || !tindakan) {
+                    showToast('Data belum lengkap', 'Diagnosis dan Tindakan wajib diisi sebelum menandai selesai');
+                    return;
                 }
-                const startIsPast = selectedDate.getTime() < now.getTime();
-                if (startIsPast) {
+
+                try {
+                    // Step 1: Ambil detail janji (untuk id_pasien, id_dokter, tgl)
+                    const janjiDetailRes = await fetch(apiUrl('janji/' + id), {
+                        headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` }
+                    });
+                    const janjiDetail = await janjiDetailRes.json().then(b => b?.data || b).catch(() => ({}));
+
+                    // Step 2: Cek rekam medis yang ada
+                    const checkRes = await fetch(apiUrl('rekam-medis'), {
+                        headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` }
+                    });
+                    const allRekamMedis = await checkRes.json().catch(() => []);
+                    const allData = allRekamMedis?.data || allRekamMedis;
+                    const existingRekamMedis = Array.isArray(allData)
+                        ? allData.find(rm => rm.id_janji_temu == id)
+                        : null;
+
+                    // Step 3: Siapkan payload rekam medis
+                    const rekamMedisPayload = {
+                        id_pasien: janjiDetail.id_pasien,
+                        id_dokter: janjiDetail.id_dokter,
+                        id_janji_temu: parseInt(id, 10),
+                        // ==================== DIPERBAIKI DI SINI ====================
+                        tanggal_kunjungan: normalizeDateString(janjiDetail.tanggal_janji), // Gunakan helper untuk membersihkan tanggal
+                        // ==========================================================
+                        diagnosis: diagnosis,
+                        tindakan: tindakan,
+                        catatan: catatanMedis || null
+                    };
+
+                    let rekamMedisResponse;
+                    const headersRekamMedis = {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'X-CSRF-TOKEN': csrf,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    };
+
+                    // Step 4: Buat atau Update rekam medis
+                    if (existingRekamMedis) {
+                        // Update (PUT)
+                        rekamMedisResponse = await fetch(apiUrl(`rekam-medis/${existingRekamMedis.id_rekam_medis}`), {
+                            method: 'PUT',
+                            headers: headersRekamMedis,
+                            body: JSON.stringify(rekamMedisPayload)
+                        });
+                    } else {
+                        // Buat (POST)
+                        rekamMedisResponse = await fetch(apiUrl('rekam-medis'), {
+                            method: 'POST',
+                            headers: headersRekamMedis,
+                            body: JSON.stringify(rekamMedisPayload)
+                        });
+                    }
+
+                    if (!rekamMedisResponse.ok) {
+                        const errorBody = await rekamMedisResponse.json().catch(() => ({}));
+                        console.error("Error saat POST/PUT rekam-medis:", errorBody); // Tambah log
+                        showToast('Gagal menyimpan rekam medis', errorBody?.message || 'Terjadi kesalahan. Status janji tidak diubah.');
+                        return;
+                    }
+
+                    // Step 5: Jika rekam medis OK, siapkan payload untuk update status janji
+                    payload = { status: 'selesai' };
+
+                } catch (e) {
+                    console.error("Error di try-catch rekam medis:", e); // Tambah log
+                    showToast('Gagal', 'Terjadi kesalahan saat memproses rekam medis: ' + e.message);
+                    return;
+                }
+
+                // PRIORITAS 3: Edit Jadwal (Tanggal/Waktu)
+            } else {
+                if (!tanggal || !mulai) {
+                    showToast('Data belum lengkap', 'Tanggal dan waktu mulai wajib diisi.');
+                    return;
+                }
+                if (isTimeInPast(tanggal, mulai)) {
                     showToast('Waktu tidak valid', 'Tidak boleh mengatur janji di waktu yang sudah lewat.');
                     return;
                 }
-            } catch (_) {
+                payload = {
+                    tanggal_janji: tanggal,
+                    waktu_mulai: mulai,
+                };
             }
-        }
 
-        // Susun payload sesuai spesifikasi Swagger:
-        // - Assign dokter (role dokter): kirim hanya { id_dokter }
-        // - Update jadwal/keluhan: gunakan { tanggal_janji, waktu_mulai, waktu_selesai?, keluhan? }
-        let payload;
-        let attemptType;
-        if (isReassign) {
-            payload = { id_dokter: assignDoctorId };
-            attemptType = 'doctor_only';
-        } else {
+            // === LOGIKA UNTUK PASIEN ===
+        } else if (isPatientRole) {
+            const tanggal = document.getElementById('editTanggal').value;
+            const mulai = document.getElementById('editMulai').value;
+            const catatan = document.getElementById('editCatatan').value;
+
+            if (!tanggal || !mulai) {
+                showToast('Data belum lengkap', 'Tanggal dan waktu mulai wajib diisi.');
+                return;
+            }
+            if (isTimeInPast(tanggal, mulai)) {
+                showToast('Waktu tidak valid', 'Tidak boleh mengatur janji di waktu yang sudah lewat.');
+                return;
+            }
             payload = {
                 tanggal_janji: tanggal,
                 waktu_mulai: mulai,
                 ...(catatan ? { keluhan: catatan } : {}),
             };
-            attemptType = 'schedule';
+
+            // === LOGIKA UNTUK KASUS LAIN (Misal janji sudah selesai) ===
+        } else {
+            showToast('Tidak ada aksi', 'Janji ini tidak dapat diubah lagi.');
+            return;
         }
 
-        // Jika bukan reassign, abaikan blok ini
-
-        // ==== DEBUG PANEL & LOGGING ====
+        // === KIRIM REQUEST UPDATE JANJI (FINAL) ===
         const headersObj = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
@@ -562,66 +742,9 @@
             'X-Requested-With': 'XMLHttpRequest'
         };
 
-        const endpoint = `janji/${encodeURIComponent(id)}`;
-        const userData = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch (_) { return {}; } })();
-        const role = (window.APP_ROLE) || userData?.role || userData?.roles?.[0] || 'unknown';
-        const debugInfo = {
-            action: 'submitEditJanji',
-            method: 'PUT',
-            endpoint,
-            role,
-            id,
-            payload,
-            headers: {
-                ...headersObj,
-                Authorization: token ? `Bearer ${String(token).slice(0, 10)}…` : ''
-            },
-            timestamp: new Date().toISOString()
-        };
-
         try {
-            // Console logging
-            console.group('Edit Janji Debug');
-            console.log('Request:', debugInfo);
-            console.groupEnd();
-
-            // Floating debug panel
-            (function renderEditDebug(info) {
-                const panelId = 'editDebugPanel';
-                let panel = document.getElementById(panelId);
-                if (!panel) {
-                    panel = document.createElement('div');
-                    panel.id = panelId;
-                    panel.style.position = 'fixed';
-                    panel.style.right = '12px';
-                    panel.style.bottom = '12px';
-                    panel.style.zIndex = '9999';
-                    panel.style.width = '380px';
-                    panel.style.maxHeight = '55vh';
-                    panel.style.overflow = 'auto';
-                    panel.style.background = '#ffffff';
-                    panel.style.border = '1px solid #e5e7eb';
-                    panel.style.borderRadius = '8px';
-                    panel.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                    panel.innerHTML = `
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #eee;background:#f9fafb;">
-                            <strong style="font-size:13px;color:#111827;">Debug Edit Janji</strong>
-                            <div>
-                                <button id="editDebugClose" style="font-size:12px;padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;cursor:pointer;">Tutup</button>
-                            </div>
-                        </div>
-                        <pre id="editDebugContent" style="margin:0;padding:10px 12px;font-size:12px;line-height:1.5;color:#374151;white-space:pre-wrap;"></pre>
-                    `;
-                    document.body.appendChild(panel);
-                    const btn = panel.querySelector('#editDebugClose');
-                    btn.addEventListener('click', () => panel.remove());
-                }
-                const pre = panel.querySelector('#editDebugContent');
-                if (pre) pre.textContent = JSON.stringify(info, null, 2);
-            })(debugInfo);
-
             let res = await fetch(endpoint, {
-                method: 'PUT',
+                method: method,
                 headers: headersObj,
                 body: JSON.stringify(payload)
             });
@@ -632,24 +755,6 @@
             }
 
             const body = await res.json().catch(() => ({}));
-            // Update debug panel dengan respons
-            try {
-                const panel = document.getElementById('editDebugPanel');
-                const pre = panel?.querySelector('#editDebugContent');
-                if (pre) {
-                    const latest = {
-                        ...debugInfo,
-                        response: {
-                            status: res.status,
-                            ok: res.ok,
-                            body
-                        }
-                    };
-                    pre.textContent = JSON.stringify(latest, null, 2);
-                }
-            } catch (_) {}
-
-            // Tidak ada retry tambahan untuk reassign; payload sudah minimal sesuai spesifikasi
 
             if (res.ok) {
                 showToast('Berhasil', body?.message || 'Jadwal janji temu berhasil diperbarui');
@@ -666,13 +771,31 @@
             } else if (res.status === 400) {
                 showToast('Di luar jam kerja', body?.message || 'Jadwal berada di luar jam kerja dokter');
             } else {
+                console.error("Error saat PUT janji:", body); // Tambah log
                 showToast('Gagal', body?.message || 'Terjadi kesalahan saat memperbarui janji temu');
             }
         } catch (e) {
-            showToast('Jaringan bermasalah', 'Gagal memperbarui janji. Coba lagi.');
+            console.error("Error di try-catch janji:", e); // Tambah log
+            showToast('Jaringan bermasalah', 'Gagal memperbarui janji. Coba lagi: ' + e.message);
         }
     }
 
+    // Fungsi helper baru untuk validasi waktu
+    function isTimeInPast(tanggal, hhmm) {
+        try {
+            const now = new Date();
+            const selectedDate = new Date(tanggal + 'T00:00:00');
+            const [hMulai, mMulai] = (hhmm || '').split(':').map(Number);
+
+            if (Number.isFinite(hMulai) && Number.isFinite(mMulai)) {
+                selectedDate.setHours(hMulai, mMulai, 0, 0);
+            }
+            // Beri toleransi 1 menit
+            return selectedDate.getTime() < (now.getTime() - 60000);
+        } catch (_) {
+            return false; // Jika format salah, biarkan backend yg validasi
+        }
+    }
     async function deleteJanji(id) {
         const token = localStorage.getItem('access_token');
         if (!token) {
@@ -684,7 +807,7 @@
         const ok = window.confirm('Yakin ingin membatalkan janji ini?');
         if (!ok) return;
         try {
-            const res = await fetch(`/janji/${encodeURIComponent(id)}`, {
+            const res = await fetch(localUrl('janji/' + encodeURIComponent(id)), {
                 method: 'DELETE',
                 headers: {
                     'Accept': 'application/json',
@@ -724,7 +847,7 @@
         let pasien = document.getElementById('searchPasien')?.value || '';
         const sortRaw = document.getElementById('searchSort')?.value || '';
         const sortVal = normalizeSortValue(sortRaw);
-        const role = (function() {
+        const role = (function () {
             try {
                 if (window.APP_ROLE) return String(window.APP_ROLE);
                 const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -740,7 +863,7 @@
             return;
         }
         try {
-            const base = 'https://smart-healthcare-system-production-6e7c.up.railway.app/api/janji';
+            const base = apiUrl('janji');
             const url = sortVal ? `${base}?sort=${encodeURIComponent(sortVal)}` : base;
             const res = await fetch(url, {
                 headers: {
@@ -757,7 +880,7 @@
             if (!Array.isArray(items)) items = [];
             const renderedList = sortVal ? items : (orderAppointmentsForUpcoming(items).length ? orderAppointmentsForUpcoming(items) : items);
             setAppointments(renderedList);
-        } catch (_) {}
+        } catch (_) { }
     }
 
     async function openJanjiDetail(id) {
@@ -767,7 +890,7 @@
             return;
         }
         try {
-            const res = await fetch(`/janji/${id}`, {
+            const res = await fetch(localUrl('janji/' + id), {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -866,7 +989,7 @@
         }
         // Atur visibilitas input pencarian berdasarkan role
         try {
-            const role = (function() {
+            const role = (function () {
                 try {
                     if (window.APP_ROLE) return String(window.APP_ROLE);
                     const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -888,7 +1011,7 @@
                 if (dokterInput) { dokterInput.classList.remove('hidden'); }
                 if (pasienInput) { pasienInput.classList.remove('hidden'); }
             }
-        } catch (_) {}
+        } catch (_) { }
         let pending = null;
         try { pending = JSON.parse(localStorage.getItem('pendingBooking')); } catch (_) { }
         if (!token) {
@@ -965,7 +1088,7 @@
         } catch (_) {
         }
 
-        try { await loadStatistikJanji(); } catch (_) {}
+        try { await loadStatistikJanji(); } catch (_) { }
     }
 
     document.addEventListener('DOMContentLoaded', initDashboard);

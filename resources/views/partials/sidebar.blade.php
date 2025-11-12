@@ -1,3 +1,12 @@
+@php
+    // Ambil user dari session atau auth, lalu tentukan role
+    $sessionUser = session('user');
+    $user = $sessionUser ?: auth()->user();
+    $role = data_get($user, 'role')
+        ?? data_get($user, 'roles.0')
+        ?? data_get($user, 'roles.0.name');
+@endphp
+
 <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white border-r border-gray-200 sidebar-transition z-40 w-64">
     <div class="flex flex-col h-full">
         <!-- Logo -->
@@ -29,17 +38,19 @@
                         <span class="sidebar-text">Dashboard</span>
                     </a>
                 </li>
-                <li>
-                    <a href="/ketersediaan"
-                        class="flex items-center gap-3 px-4 py-3 rounded-lg {{ isset($active) && $active === 'ketersediaan' ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white' : 'text-gray-700 hover:bg-gray-100 transition' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
-                            </path>
-                        </svg>
-                        <span class="sidebar-text">Janji Temu</span>
-                    </a>
-                </li>
+                @if (strtolower((string) $role) === 'pasien')
+                    <li>
+                        <a href="/ketersediaan"
+                            class="flex items-center gap-3 px-4 py-3 rounded-lg {{ isset($active) && $active === 'ketersediaan' ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white' : 'text-gray-700 hover:bg-gray-100 transition' }}">
+                            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                            <span class="sidebar-text">Janji Temu</span>
+                        </a>
+                    </li>
+                @endif
                 <li>
                     <a href="/rekam-medis"
                         class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition">
