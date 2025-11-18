@@ -36,9 +36,9 @@ return [
     ],
 
     'api_gateway' => [
-        'base_url' => env('API_GATEWAY_URL', 'https://smart-healthcare-system-production-6e7c.up.railway.app/api'),
-        'token' => env('API_GATEWAY_TOKEN'),
-        'timeout' => env('API_GATEWAY_TIMEOUT', 15),
-    ],
+    'base_url' => env('API_GATEWAY_URL', 'https://smart-healthcare-system-production-6e7c.up.railway.app/api'),
+    'token' => env('API_GATEWAY_TOKEN'),
+    'timeout' => env('API_GATEWAY_TIMEOUT', 15),
+],
 
 ];
